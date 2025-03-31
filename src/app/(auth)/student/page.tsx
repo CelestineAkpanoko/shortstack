@@ -30,6 +30,7 @@ export default function StudentLoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schoolEmail, password }),
+        cache: 'no-store',
       });
 
       const data = await res.json();

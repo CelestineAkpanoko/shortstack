@@ -120,6 +120,8 @@ export function StoreItemCard({
           </div>
         </div>
       </Card>
+
+      
       <EditStoreItemForm
         isOpen={isEditing}
         onClose={() => setIsEditing(false)}
