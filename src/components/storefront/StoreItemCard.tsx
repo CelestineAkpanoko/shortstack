@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Card } from "@/src/components/ui/card";
 import { formatCurrency } from "@/src/lib/utils";
-import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import { EditStoreItemForm } from "./EditStoreItemForm";
 import { deleteStoreItem } from "@/src/app/actions/storeFrontActions";
@@ -15,6 +14,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/src/components/ui/dropdown-menu";
+import DeleteStoreItemDialog from "./DeleteStoreItemDialog";
+
 
 interface StoreItemCardProps {
   id: string;
@@ -25,7 +26,6 @@ interface StoreItemCardProps {
   quantity: number;
   isAvailable: boolean;
   backgroundColor: string;
-  onDelete?: () => void;
 }
 
 export function StoreItemCard({
@@ -37,24 +37,10 @@ export function StoreItemCard({
   quantity,
   isAvailable,
   backgroundColor,
-  onDelete,
 }: StoreItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const handleDelete = async () => {
-    try {
-      const result = await deleteStoreItem(id);
-      if (result.success) {
-        toast.success("Item deleted successfully");
-        onDelete?.();
-      } else {
-        toast.error(result.error || "Failed to delete item");
-      }
-    } catch (error) {
-      toast.error("Failed to delete item");
-      console.error("Delete item error:", error);
-    }
-  };
   return (
     <>
       <Card className="bg-transparent w-[250px] h-[250px] rounded-xl relative">
@@ -71,7 +57,7 @@ export function StoreItemCard({
             variant="destructive"
             size="icon"
             className="w-8 h-8"
-            onClick={handleDelete}
+            onClick={() => setShowDeleteDialog(true)}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -94,14 +80,14 @@ export function StoreItemCard({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => setIsEditing(true)}>
                     <Pencil className="mr-2 h-4 w-4" />
-                    Edit
+                    Edit Store Item
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-red-600"
-                    onClick={handleDelete}
+                    onClick={() => setShowDeleteDialog(true)}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
+                    Delete Store Item
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -135,6 +121,12 @@ export function StoreItemCard({
           isAvailable,
         }}
       />
+      <DeleteStoreItemDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        storeItemId={id}
+        storeItemName={name}
+    />
     </>
   );
 }

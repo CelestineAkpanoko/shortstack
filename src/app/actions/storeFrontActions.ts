@@ -63,7 +63,6 @@ export async function createStoreItem(formData: FormData): Promise<StoreItemResp
   }
 }
 
-// Get all store items for a class
 export async function getStoreItems(classId?: string): Promise<StoreItemResponse> {
   try {
     const { userId } = await auth();
@@ -71,19 +70,33 @@ export async function getStoreItems(classId?: string): Promise<StoreItemResponse
       return { success: false, error: "Not authorized" };
     }
 
-    // If classId is provided, filter by class, otherwise get all items
-    const items = await db.storeItem.findMany({
-      where: classId ? { classId } : undefined,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        class: {
-          select: {
-            name: true,
-            code: true,
-            emoji: true
-          }
+    // For many-to-many relationships, use "some" to filter
+    let whereClause: any = {
+      class: {
+        some: {
+          userId
         }
       }
+    };
+
+    // If filtering by classId
+    if (classId) {
+      whereClause = {
+        class: {
+          some: {
+            id: classId,
+            userId
+          }
+        }
+      };
+    }
+
+    const items = await db.storeItem.findMany({
+      where: whereClause,
+      include: {
+        class: true
+      },
+      orderBy: { createdAt: 'desc' },
     });
 
     return { success: true, data: items };
@@ -92,6 +105,116 @@ export async function getStoreItems(classId?: string): Promise<StoreItemResponse
     return { success: false, error: "Failed to fetch store items" };
   }
 }
+
+// interface CopyStoreItemToClassParams {
+//   storeItemId: string;
+//   targetClassIds: string[];
+// }
+// // Copy a store item to multiple classes
+// export async function copyStoreItemToClasses({
+//   storeItemId,
+//   targetClassIds
+// }: CopyStoreItemToClassParams): Promise<StoreItemResponse> {
+//   try {
+//     const { userId } = await auth();
+//     if (!userId) {
+//       return { success: false, error: "Not authorized" };
+//     }
+
+//     // Validate input
+//     if (!storeItemId) {
+//       return { success: false, error: "Store item ID is required" };
+//     }
+    
+//     if (!targetClassIds || targetClassIds.length === 0) {
+//       return { success: false, error: "At least one target class must be selected" };
+//     }
+
+//     // Get the original store item
+//     const originalItem = await db.storeItem.findUnique({
+//       where: {
+//         id: storeItemId,
+//         class: {
+//           some: {
+//             userId
+//           }
+//         }
+//       },
+//       include: {
+//         class: true
+//       }
+//     });
+
+//     if (!originalItem) {
+//       return { success: false, error: "Store item not found" };
+//     }
+
+//     // Verify the user owns this item
+//     if (originalItem.userId !== userId) {
+//       return { success: false, error: "You don't have permission to assign this item" };
+//     }
+
+//     // Check if the item is already assigned to any of the target classes
+//     const existingAssignments = await db.storeItem.findMany({
+//       where: {
+//         name: originalItem.name,
+//         classId: { in: targetClassIds }
+//       },
+//       select: {
+//         classId: true
+//       }
+//     });
+
+//     // Filter out classes that already have this item
+//     const existingClassIds = existingAssignments.map(item => item.classId);
+//     const newTargetClassIds = targetClassIds.filter(id => !existingClassIds.includes(id));
+
+//     if (newTargetClassIds.length === 0) {
+//       return { 
+//         success: false, 
+//         error: "This item is already assigned to all selected classes" 
+//       };
+//     }
+
+//     // Create copies of the store item for each target class
+//     const creationPromises = newTargetClassIds.map(classId => 
+//       db.storeItem.create({
+//         data: {
+//           name: originalItem.name,
+//           emoji: originalItem.emoji,
+//           price: originalItem.price,
+//           description: originalItem.description,
+//           quantity: originalItem.quantity,
+//           isAvailable: originalItem.isAvailable,
+//           classId: classId,
+//           userId: userId // Ensure the item is owned by current user
+//         }
+//       })
+//     );
+
+//     const createdItems = await Promise.all(creationPromises);
+
+//     revalidatePath("/dashboard/storefront");
+    
+//     // Create appropriate success message
+//     let message = "";
+//     if (existingClassIds.length > 0) {
+//       message = `Item assigned to ${newTargetClassIds.length} additional ${newTargetClassIds.length === 1 ? 'class' : 'classes'}. ${existingClassIds.length} ${existingClassIds.length === 1 ? 'class was' : 'classes were'} skipped as the item was already assigned.`;
+//     } else {
+//       message = `Item successfully assigned to ${newTargetClassIds.length} ${newTargetClassIds.length === 1 ? 'class' : 'classes'}.`;
+//     }
+    
+//     return { 
+//       success: true,
+//       message,
+//       data: createdItems
+//     };
+//   } catch (error) {
+//     console.error("Copy store item error:", error);
+//     return { success: false, error: "Failed to assign store item to classes" };
+//   }
+// }
+
 
 // Assign class to store item
 export async function assignClassToStoreItem(
