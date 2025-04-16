@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/src/components/ui/card";
 import { formatCurrency } from "@/src/lib/utils";
 import { Button } from "@/src/components/ui/button";
 import { EditStoreItemForm } from "./EditStoreItemForm";
 import { deleteStoreItem } from "@/src/app/actions/storeFrontActions";
 import { toast } from "react-toastify";
-import { Pencil, Trash2, MoreVertical } from "lucide-react";
+import { Copy, Pencil, Trash2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/src/components/ui/dropdown-menu";
 import DeleteStoreItemDialog from "./DeleteStoreItemDialog";
-
+import AssignStoreItemDialog from "./AssignStoreItemDialog";
 
 interface StoreItemCardProps {
   id: string;
@@ -26,6 +27,7 @@ interface StoreItemCardProps {
   quantity: number;
   isAvailable: boolean;
   backgroundColor: string;
+  classes?: Array<{ id: string; name: string }>;
 }
 
 export function StoreItemCard({
@@ -37,13 +39,23 @@ export function StoreItemCard({
   quantity,
   isAvailable,
   backgroundColor,
+  classes = [],
 }: StoreItemCardProps) {
+  const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+
+  const navigateToStoreItem = () => {
+    router.push(`/store/${id}`);
+  };
 
   return (
     <>
-      <Card className="bg-transparent w-[250px] h-[250px] rounded-xl relative">
+      <Card
+        className="bg-transparent w-[250px] h-[250px] rounded-xl relative"
+        onClick={navigateToStoreItem}
+      >
         <div className="absolute top-2 right-2 hidden group-hover:flex gap-2 z-10">
           <Button
             variant="secondary"
@@ -52,6 +64,14 @@ export function StoreItemCard({
             onClick={() => setIsEditing(true)}
           >
             <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="w-8 h-8"
+            onClick={() => setShowAssignDialog(true)}
+          >
+            <Copy className="h-4 w-4" />
           </Button>
           <Button
             variant="destructive"
@@ -82,6 +102,10 @@ export function StoreItemCard({
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit Store Item
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowAssignDialog(true)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Assign to More Classes
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-red-600"
                     onClick={() => setShowDeleteDialog(true)}
@@ -107,7 +131,6 @@ export function StoreItemCard({
         </div>
       </Card>
 
-      
       <EditStoreItemForm
         isOpen={isEditing}
         onClose={() => setIsEditing(false)}
@@ -121,12 +144,20 @@ export function StoreItemCard({
           isAvailable,
         }}
       />
+      <AssignStoreItemDialog
+        isOpen={showAssignDialog}
+        onClose={() => setIsEditing(false)}
+        assignedClasses={classes}
+        storeItemId={id}
+        storeItemTitle={name}
+      />
+
       <DeleteStoreItemDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         storeItemId={id}
         storeItemName={name}
-    />
+      />
     </>
   );
 }

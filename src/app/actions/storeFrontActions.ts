@@ -392,6 +392,30 @@ export async function deleteStoreItem(id: string): Promise<StoreItemResponse> {
   }
 }
 
+// Assign class to store item
+export async function assignClassToStoreItem(
+  itemId: string,
+  classId: string
+): Promise<StoreItemResponse> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Not authorized" };
+    }
+
+    const updatedItem = await db.storeItem.update({
+      where: { id: itemId },
+      data: { classId }
+    });
+
+    revalidatePath("/dashboard/storefront");
+    return { success: true, data: updatedItem };
+  } catch (error) {
+    console.error("Assign class error:", error);
+    return { success: false, error: "Failed to assign class to store item" };
+  }
+}
+
 // Purchase a store item
 export async function purchaseStoreItem(
   itemId: string,
