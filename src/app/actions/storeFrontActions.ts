@@ -27,32 +27,64 @@ interface StoreItemResponse {
   success: boolean;
   data?: any;
   error?: string;
+  message?: string;
 }
 
 // Create a new store item
-export async function createStoreItem(formData: FormData): Promise<StoreItemResponse> {
+export async function createStoreItem(
+  formData: FormData
+): Promise<StoreItemResponse> {
   try {
     const { userId } = await auth();
     if (!userId) {
       return { success: false, error: "Not authorized" };
     }
-
+    
     const data: CreateStoreItemData = {
       name: formData.get("name") as string,
-      emoji: formData.get("emoji") as string || "🛍️",
+      emoji: (formData.get("emoji") as string) || "🛍️",
       price: parseFloat(formData.get("price") as string),
       description: formData.get("description") as string,
-      quantity: parseInt(formData.get("quantity") as string, 10),
+      quantity: parseInt(formData.get("quantity") as string, 10) || 0,
       isAvailable: formData.get("isAvailable") === "true",
     };
 
+    // Get class IDs - now supporting multiple classes
+    const classIds = formData.getAll("classIds") as string[];
+
     // Validate required fields
-    if (!data.name || !data.price) {
+    if (!data.name || isNaN(data.price)) {
       return { success: false, error: "Missing required fields" };
     }
 
+    if (!classIds.length) {
+      return { success: false, error: "At least one class must be selected" };
+    }
+
+    // Verify that all classes belong to this user
+    const classes = await db.class.findMany({
+      where: {
+        id: { in: classIds },
+        userId: userId
+      }
+    });
+
+    // If any class doesn't belong to this user or doesn't exist
+    if (classes.length !== classIds.length) {
+      return { success: false, error: "One or more selected classes are invalid" };
+    }
+
+    // Create the store item with class assignments
     const newItem = await db.storeItem.create({
-      data
+      data: {
+        ...data,
+        class: {
+          connect: classIds.map(id => ({ id }))
+        }
+      },
+      include: {
+        class: true
+      }
     });
 
     revalidatePath("/dashboard/storefront");
@@ -63,6 +95,124 @@ export async function createStoreItem(formData: FormData): Promise<StoreItemResp
   }
 }
 
+// Get store items across all classes for the current user
+export async function getAllStoreItems(filters?: {
+  classId?: string;
+}): Promise<StoreItemResponse> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Not authorized" };
+    }
+
+    // All store items must be associated with a class owned by this user
+    let whereClause: any = {
+      class: {
+        some: {
+          userId: userId
+        }
+      }
+    };
+
+    // Add class filter if provided
+    if (filters?.classId) {
+      whereClause = {
+        class: {
+          some: { 
+            id: filters.classId,
+            userId
+          }
+        }
+      };
+    }
+
+    const items = await db.storeItem.findMany({
+      where: whereClause,
+      include: {
+        class: {
+          select: {
+            id: true,
+            name: true,
+            emoji: true,
+            code: true,
+          },
+        },
+        purchases: {
+          include: {
+            student: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profileImage: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { success: true, data: items };
+  } catch (error) {
+    console.error("Error fetching store items:", error);
+    return { success: false, error: "Failed to fetch store items" };
+  }
+}
+
+// Get a single Store Item - ensure it belongs to the user
+export async function getStoreItem(storeItemId: string): Promise<StoreItemResponse> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "User not found" };
+    }
+
+    const storeItem = await db.storeItem.findFirst({
+      where: {
+        id: storeItemId,
+        class: {
+          some: {
+            userId: userId
+          }
+        }
+      },
+      include: {
+        class: {
+          select: {
+            id: true,
+            name: true,
+            emoji: true,
+            code: true,
+          },
+        },
+        purchases: {
+          include: {
+            student: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profileImage: true
+              }
+            }
+          }
+        }
+      },
+    });
+
+    if (!storeItem) {
+      return { success: false, error: "Store item not found or doesn't belong to you" };
+    }
+
+    return { success: true, data: storeItem };
+  } catch (error) {
+    console.error("Error fetching store item:", error);
+    return { success: false, error: "Failed to fetch store item details" };
+  }
+}
+
+// Get all store items for the current user
 export async function getStoreItems(classId?: string): Promise<StoreItemResponse> {
   try {
     const { userId } = await auth();
@@ -70,7 +220,7 @@ export async function getStoreItems(classId?: string): Promise<StoreItemResponse
       return { success: false, error: "Not authorized" };
     }
 
-    // For many-to-many relationships, use "some" to filter
+    // All store items must be associated with a class owned by this user
     let whereClause: any = {
       class: {
         some: {
@@ -79,11 +229,11 @@ export async function getStoreItems(classId?: string): Promise<StoreItemResponse
       }
     };
 
-    // If filtering by classId
+    // Add class filter if provided
     if (classId) {
       whereClause = {
         class: {
-          some: {
+          some: { 
             id: classId,
             userId
           }
@@ -94,7 +244,14 @@ export async function getStoreItems(classId?: string): Promise<StoreItemResponse
     const items = await db.storeItem.findMany({
       where: whereClause,
       include: {
-        class: true
+        class: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            emoji: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -106,139 +263,90 @@ export async function getStoreItems(classId?: string): Promise<StoreItemResponse
   }
 }
 
-// interface CopyStoreItemToClassParams {
-//   storeItemId: string;
-//   targetClassIds: string[];
-// }
-// // Copy a store item to multiple classes
-// export async function copyStoreItemToClasses({
-//   storeItemId,
-//   targetClassIds
-// }: CopyStoreItemToClassParams): Promise<StoreItemResponse> {
-//   try {
-//     const { userId } = await auth();
-//     if (!userId) {
-//       return { success: false, error: "Not authorized" };
-//     }
+interface CopyStoreItemToClassParams {
+  storeItemId: string;
+  targetClassIds: string[];
+}
 
-//     // Validate input
-//     if (!storeItemId) {
-//       return { success: false, error: "Store item ID is required" };
-//     }
-    
-//     if (!targetClassIds || targetClassIds.length === 0) {
-//       return { success: false, error: "At least one target class must be selected" };
-//     }
-
-//     // Get the original store item
-//     const originalItem = await db.storeItem.findUnique({
-//       where: {
-//         id: storeItemId,
-//         class: {
-//           some: {
-//             userId
-//           }
-//         }
-//       },
-//       include: {
-//         class: true
-//       }
-//     });
-
-//     if (!originalItem) {
-//       return { success: false, error: "Store item not found" };
-//     }
-
-//     // Verify the user owns this item
-//     if (originalItem.userId !== userId) {
-//       return { success: false, error: "You don't have permission to assign this item" };
-//     }
-
-//     // Check if the item is already assigned to any of the target classes
-//     const existingAssignments = await db.storeItem.findMany({
-//       where: {
-//         name: originalItem.name,
-//         classId: { in: targetClassIds }
-//       },
-//       select: {
-//         classId: true
-//       }
-//     });
-
-//     // Filter out classes that already have this item
-//     const existingClassIds = existingAssignments.map(item => item.classId);
-//     const newTargetClassIds = targetClassIds.filter(id => !existingClassIds.includes(id));
-
-//     if (newTargetClassIds.length === 0) {
-//       return { 
-//         success: false, 
-//         error: "This item is already assigned to all selected classes" 
-//       };
-//     }
-
-//     // Create copies of the store item for each target class
-//     const creationPromises = newTargetClassIds.map(classId => 
-//       db.storeItem.create({
-//         data: {
-//           name: originalItem.name,
-//           emoji: originalItem.emoji,
-//           price: originalItem.price,
-//           description: originalItem.description,
-//           quantity: originalItem.quantity,
-//           isAvailable: originalItem.isAvailable,
-//           classId: classId,
-//           userId: userId // Ensure the item is owned by current user
-//         }
-//       })
-//     );
-
-//     const createdItems = await Promise.all(creationPromises);
-
-//     revalidatePath("/dashboard/storefront");
-    
-//     // Create appropriate success message
-//     let message = "";
-//     if (existingClassIds.length > 0) {
-//       message = `Item assigned to ${newTargetClassIds.length} additional ${newTargetClassIds.length === 1 ? 'class' : 'classes'}. ${existingClassIds.length} ${existingClassIds.length === 1 ? 'class was' : 'classes were'} skipped as the item was already assigned.`;
-//     } else {
-//       message = `Item successfully assigned to ${newTargetClassIds.length} ${newTargetClassIds.length === 1 ? 'class' : 'classes'}.`;
-//     }
-    
-//     return { 
-//       success: true,
-//       message,
-//       data: createdItems
-//     };
-//   } catch (error) {
-//     console.error("Copy store item error:", error);
-//     return { success: false, error: "Failed to assign store item to classes" };
-//   }
-// }
-
-
-// Assign class to store item
-export async function assignClassToStoreItem(
-  itemId: string,
-  classId: string
-): Promise<StoreItemResponse> {
+// Copy a store item to multiple classes
+export async function copyStoreItemToClasses({
+  storeItemId,
+  targetClassIds
+}: CopyStoreItemToClassParams): Promise<StoreItemResponse> {
   try {
     const { userId } = await auth();
     if (!userId) {
       return { success: false, error: "Not authorized" };
     }
 
+    // 1. Verify the item exists and belongs to this user
+    const originalItem = await db.storeItem.findFirst({
+      where: {
+        id: storeItemId,
+        class: {
+          some: {
+            userId
+          }
+        }
+      },
+      include: {
+        class: true
+      }
+    });
+
+    if (!originalItem) {
+      return { success: false, error: "Store item not found or doesn't belong to you" };
+    }
+
+    // 2. Verify all target classes belong to this user
+    const targetClasses = await db.class.findMany({
+      where: {
+        id: { in: targetClassIds },
+        userId
+      }
+    });
+
+    if (targetClasses.length !== targetClassIds.length) {
+      return { success: false, error: "One or more target classes are invalid" };
+    }
+
+    // 3. Check which classes the item is already assigned to
+    const existingClassIds = originalItem.class.map(cls => cls.id);
+    
+    // Filter out classes that already have this item
+    const newClassIds = targetClassIds.filter(id => !existingClassIds.includes(id));
+    
+    if (newClassIds.length === 0) {
+      return { success: false, error: "Item is already assigned to all selected classes" };
+    }
+
+    // 4. Update the store item to add the new class connections
     const updatedItem = await db.storeItem.update({
-      where: { id: itemId },
-      data: { classId }
+      where: { id: storeItemId },
+      data: {
+        class: {
+          connect: newClassIds.map(id => ({ id }))
+        }
+      },
+      include: {
+        class: true
+      }
     });
 
     revalidatePath("/dashboard/storefront");
-    return { success: true, data: updatedItem };
+    revalidatePath("/dashboard/classes");
+    
+    return { 
+      success: true,
+      message: `Item assigned to ${newClassIds.length} additional ${newClassIds.length === 1 ? 'class' : 'classes'}`,
+      data: updatedItem
+    };
   } catch (error) {
-    console.error("Assign class error:", error);
-    return { success: false, error: "Failed to assign class to store item" };
+    console.error("Copy store item error:", error);
+    return { success: false, error: "Failed to assign store item to classes" };
   }
 }
+
 
 // Update a store item
 export async function updateStoreItem(
@@ -253,7 +361,7 @@ export async function updateStoreItem(
 
     const updatedItem = await db.storeItem.update({
       where: { id },
-      data
+      data,
     });
 
     revalidatePath("/dashboard/storefront");
@@ -273,7 +381,7 @@ export async function deleteStoreItem(id: string): Promise<StoreItemResponse> {
     }
 
     await db.storeItem.delete({
-      where: { id }
+      where: { id },
     });
 
     revalidatePath("/dashboard/storefront");
@@ -297,7 +405,7 @@ export async function purchaseStoreItem(
     }
 
     const item = await db.storeItem.findUnique({
-      where: { id: itemId }
+      where: { id: itemId },
     });
 
     if (!item) {
@@ -320,15 +428,15 @@ export async function purchaseStoreItem(
           studentId,
           quantity,
           totalPrice: item.price * quantity,
-          status: 'PENDING'
-        }
+          status: "PENDING",
+        },
       }),
       db.storeItem.update({
         where: { id: itemId },
         data: {
-          quantity: item.quantity - quantity
-        }
-      })
+          quantity: item.quantity - quantity,
+        },
+      }),
     ]);
 
     revalidatePath("/dashboard/storefront");

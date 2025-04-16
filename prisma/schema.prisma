@@ -34,7 +34,7 @@ model Class {
   user        User         @relation(fields: [userId], references: [clerkUserId], onDelete: Cascade)
   enrollments Enrollment[]
   lessonPlans LessonPlan[]
-  storeItems   StoreItem[]
+  storeItems   StoreItem[] @relation("StoreItemToClass")
   students    Student[]
   bills       Bill[]       @relation("BillToClass")
 
@@ -155,7 +155,7 @@ model StoreItem {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   purchases   StudentPurchase[]
-  class       Class[]   // Many-to-many relationship (no classId field)
+  class       Class[]   @relation("StoreItemToClass")
 }
 
 model StudentPurchase {

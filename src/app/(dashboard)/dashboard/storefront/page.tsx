@@ -1,5 +1,5 @@
 // import DashboardAddStoreItemCard from "@/src/components/storefront/dashboardAddStoreItemCard";
-import { getStoreItems } from "@/src/app/actions/storeFrontActions";
+import { getAllStoreItems } from "@/src/app/actions/storeFrontActions";
 import { StoreItemCard } from "@/src/components/storefront/StoreItemCard";
 // import { Store } from "lucide-react";
 import AddAnything from "@/src/components/AddAnything";
@@ -18,9 +18,9 @@ export default async function StoreFrontPage() {
         return "bg-blue-200";
     }
   };
-  const response = await getStoreItems();
+  const response = await getAllStoreItems();
   if (!response.success || !response.data) {
-    return <div>Failed to load classes</div>;
+    return <div>Failed to load storeItems</div>;
   }
 
     // Reverse the array so newest items are at the end
