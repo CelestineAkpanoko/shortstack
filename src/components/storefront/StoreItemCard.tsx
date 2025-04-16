@@ -47,7 +47,7 @@ export function StoreItemCard({
   const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const navigateToStoreItem = () => {
-    router.push(`/store/${id}`);
+    router.push(`/dashboard/storefront/${id}`);
   };
 
   return (
