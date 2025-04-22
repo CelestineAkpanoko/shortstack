@@ -4,6 +4,20 @@ import { db } from '@/src/lib/db';
 import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 
+
+interface GenericLessonPlanData {
+  name: string;
+  description?: string;
+  classCode: string;
+}
+
+interface GenericLessonPlanResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
+
 interface LessonPlanData {
   name: string;
   description?: string;
@@ -51,6 +65,88 @@ export async function createLessonPlan(
       error?.message || 'Unknown error'
     );
     return { success: false, error: 'Failed to create lesson plan' };
+  }
+}
+
+// Create a lesson plan using the generic lesson plan ID.
+export async function copyGenericLessonPlanToUser(
+  genericLessonPlanId: string,
+  userId: string,
+  classId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const genericLessonPlan = await db.genericLessonPlan.findUnique({
+      where: { id: genericLessonPlanId },
+    });
+
+    if (!genericLessonPlan) {
+      return { success: false, error: "Generic lesson plan not found" };
+    }
+
+    const newLessonPlan = await db.lessonPlan.create({
+      data: {
+        name: genericLessonPlan.name,
+        description: genericLessonPlan.description,
+        classId,
+        genericLessonPlanId: genericLessonPlan.id,
+      },
+    });
+
+    return { success: true, data: newLessonPlan };
+  } catch (error) {
+    console.error("Error copying generic lesson plan:", error);
+    return { success: false, error: "Failed to copy generic lesson plan" };
+  }
+}
+
+// Update a generic lesson plan.
+// This function is only accessible to super users.
+export async function updateGenericLessonPlan(
+  genericLessonPlanId: string,
+  data: Partial<{ name: string; description: string }>,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+
+  if (user?.role !== "SUPER_USER") {
+    return { success: false, error: "Not authorized to update generic lesson plans" };
+  }
+
+  try {
+    await db.genericLessonPlan.update({
+      where: { id: genericLessonPlanId },
+      data,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating generic lesson plan:", error);
+    return { success: false, error: "Failed to update generic lesson plan" };
+  }
+}
+
+// Get all lesson plans for a given user.
+export async function getLessonPlans(userId: string): Promise<any> {
+  try {
+    const lessonPlans = await db.lessonPlan.findMany({
+      where: {
+        OR: [
+          { class: { userId } }, // User-specific lesson plans
+          { genericLessonPlanId: null }, // Generic lesson plans
+        ],
+      },
+      include: {
+        class: true,
+        genericLessonPlan: true,
+      },
+    });
+
+    return { success: true, data: lessonPlans };
+  } catch (error) {
+    console.error("Error fetching lesson plans:", error);
+    return { success: false, error: "Failed to fetch lesson plans" };
   }
 }
 

@@ -15,6 +15,7 @@ model User {
   imageURL    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  role        String   @default("USER") // Add this field for roles
   classes     Class[]
 }
 
@@ -34,7 +35,7 @@ model Class {
   user        User         @relation(fields: [userId], references: [clerkUserId], onDelete: Cascade)
   enrollments Enrollment[]
   lessonPlans LessonPlan[]
-  storeItems   StoreItem[] @relation("StoreItemToClass")
+  storeItems  StoreItem[]  @relation("StoreItemToClass")
   students    Student[]
   bills       Bill[]       @relation("BillToClass")
 
@@ -75,42 +76,62 @@ model Enrollment {
   @@unique([studentId, classId])
 }
 
-model LessonPlan {
+model GenericLessonPlan {
   id          String       @id @default(cuid())
   name        String       @unique
   description String?
-  classId     String
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  class       Class        @relation(fields: [classId], references: [code], onDelete: Cascade)
-  assignments Assignment[] @relation("LessonPlanAssignments")
-  files       File[]       @relation("LessonPlanFiles")
+  createdBy   String?
+  assignments Assignment[] @relation("GenericLessonPlanAssignments")
+  files       File[]       @relation("GenericLessonPlanFiles")
+  lessonPlans LessonPlan[] @relation("GenericToUserLessonPlans") // Add this relation
+}
+
+model LessonPlan {
+  id                  String             @id @default(cuid())
+  name                String
+  description         String?
+  classId             String?         
+  class               Class?             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  status              LessonPlanStatus   @default(DRAFT)
+  genericLessonPlanId String?
+  genericLessonPlan   GenericLessonPlan? @relation(fields: [genericLessonPlanId], references: [id], onDelete: SetNull, name: "GenericToUserLessonPlans")
+  assignments         Assignment[]       @relation("LessonPlanAssignments")
+  files               File[]             @relation("LessonPlanFiles")
+
+  @@index([classId])
+  @@index([genericLessonPlanId])
 }
 
 model File {
-  id          String       @id @default(cuid())
-  name        String
-  url         String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  activity    String?
-  classId     String
-  fileType    String?
-  size        Int?
-  lessonPlans LessonPlan[] @relation("LessonPlanFiles")
+  id                String              @id @default(cuid())
+  name              String
+  url               String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  activity          String?
+  classId           String
+  fileType          String?
+  size              Int?
+  lessonPlans       LessonPlan[]        @relation("LessonPlanFiles")
+  GenericLessonPlan GenericLessonPlan[] @relation("GenericLessonPlanFiles")
 }
 
 model Assignment {
-  id          String       @id @default(cuid())
-  name        String
-  dueDate     DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  activity    String?
-  classId     String
-  fileType    String
-  size        Int
-  lessonPlans LessonPlan[] @relation("LessonPlanAssignments")
+  id                String              @id @default(cuid())
+  name              String
+  dueDate           DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  activity          String?
+  classId           String
+  fileType          String
+  size              Int
+  lessonPlans       LessonPlan[]        @relation("LessonPlanAssignments")
+  GenericLessonPlan GenericLessonPlan[] @relation("GenericLessonPlanAssignments")
 }
 
 model Bill {
@@ -145,17 +166,17 @@ model StudentBill {
 }
 
 model StoreItem {
-  id          String    @id @default(cuid())
+  id          String            @id @default(cuid())
   name        String
   emoji       String
   price       Float
   description String?
-  quantity    Int       @default(0)
-  isAvailable Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  quantity    Int               @default(0)
+  isAvailable Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   purchases   StudentPurchase[]
-  class       Class[]   @relation("StoreItemToClass")
+  class       Class[]           @relation("StoreItemToClass")
 }
 
 model StudentPurchase {
@@ -203,6 +224,12 @@ model Transaction {
 
   @@index([accountId])
   @@index([receivingAccountId])
+}
+
+enum LessonPlanStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
 enum PurchaseStatus {
