@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Card, CardContent } from '@/src/components/ui/card';
+import { Card, CardContent } from "../ui/card";
 
 interface LessonPlanCardProps {
   plan: any;

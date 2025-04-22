@@ -127,6 +127,24 @@ export async function updateGenericLessonPlan(
   }
 }
 
+// Get all generic lesson plans
+export async function getGenericLessonPlans(): Promise<LessonPlanResponse> {
+  try {
+    const genericLessonPlans = await db.genericLessonPlan.findMany({
+      orderBy: { createdAt: "desc" }, // Sort by creation date (newest first)
+      include: {
+        assignments: true, // Include related assignments
+        files: true,       // Include related files
+      },
+    });
+
+    return { success: true, data: genericLessonPlans };
+  } catch (error: any) {
+    console.error("Error fetching generic lesson plans:", error);
+    return { success: false, error: "Failed to fetch generic lesson plans" };
+  }
+}
+
 // Get all lesson plans for a given user.
 export async function getLessonPlans(userId: string): Promise<any> {
   try {
