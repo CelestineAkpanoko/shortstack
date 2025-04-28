@@ -1,89 +1,59 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/src/lib/auth/config";
 import { db } from "@/src/lib/db";
-import bcrypt from "bcryptjs";
-import { sign } from 'jsonwebtoken';
-import { cookies } from 'next/headers';
 
-export async function POST(request: Request) {
+// GET: Fetch student profile with teacher info
+export async function GET(req: Request) {
   try {
-    const { schoolEmail, password } = await request.json();
+    const session = await getServerSession(authOptions);
 
-    if (!schoolEmail || !password) {
-      return NextResponse.json(
-        { error: "Missing credentials" },
-        { status: 400 }
-      );
+    if (!session?.user?.email || session.user.role !== "STUDENT") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Find the student by schoolEmail
-    const student = await db.student.findUnique({
-      where: { schoolEmail },
+    // Find student profile using the correct relation name
+    const student = await db.student.findFirst({
+      where: {
+        schoolEmail: session.user.email,
+      },
+      include: {
+        class: {
+          include: {
+            user: true,
+          },
+        },
+      },
     });
 
     if (!student) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Student profile not found" }, { status: 404 });
     }
 
-    // Verify provided password against the hashed password
-    const isValid = await bcrypt.compare(password, student.password);
-    if (!isValid) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
+    // Access the teacher through the class
+    const teacher = student.class?.user;
+    const teacherName = teacher?.name || 
+      `${teacher?.firstName || ''} ${teacher?.lastName || ''}`.trim() || 
+      'Your Teacher';
 
-    // Generate JWT token for student session
-    const token = sign(
-      { 
-        studentId: student.id, 
-        email: student.schoolEmail,
+    return NextResponse.json({ 
+      student: {
+        id: student.id,
         firstName: student.firstName,
-        lastName: student.lastName
-      },
-      process.env.JWT_SECRET || 'fallback-secret-key-for-development',
-      { expiresIn: '7d' } // Token valid for 7 days
-    );
-
-    // Set HTTP-only cookie with the token
-    const cookieStore = await cookies();
-    cookieStore.set({
-      name: 'student-auth-token',
-      value: token,
-      httpOnly: true,
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: '/',
-      sameSite: 'strict',
-      // secure: process.env.NODE_ENV === 'production'
+        lastName: student.lastName,
+        schoolEmail: student.schoolEmail,
+        progress: student.progress,
+        profileImage: student.profileImage,
+        teacher: {
+          id: teacher?.id,
+          name: teacherName,
+          email: teacher?.email,
+          image: teacher?.image,
+        }
+      } 
     });
-
-    return NextResponse.json(
-      { 
-        success: true, 
-        data: { 
-          studentId: student.id, 
-          firstName: student.firstName,
-          lastName: student.lastName,
-          schoolEmail: student.schoolEmail,
-          classId: student.classId
-        } 
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error("Student auth error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    console.error("Error fetching student profile:", error);
+    return NextResponse.json({ error: "Failed to fetch student profile" }, { status: 500 });
   }
-}
-
-// Logout endpoint
-export async function DELETE() {
-  // Clear the auth cookie
-  const cookieStore = await cookies();
-  cookieStore.delete('student-auth-token');
-  
-  return NextResponse.json({ success: true });
 }

@@ -41,7 +41,7 @@ const data = {
   navMain: [
     {
       title: "Home",
-      url: "/dashboard",
+      url: "/teacher/dashboard",
       icon: Home,
     },
     // {
@@ -51,32 +51,32 @@ const data = {
     // },  
     {
       title: "Classes",
-      url: "/dashboard/classes",
+      url: "/teacher/dashboard/classes",
       icon: NotebookPen,
     },
     {
       title: "Calendar",
-      url: "/dashboard/calendar",
+      url: "/teacher/dashboard/calendar",
       icon: Calendar,
     },
     {
       title: "Bank Accounts",
-      url: "/dashboard/bank-accounts",
+      url: "/teacher/dashboard/bank-accounts",
       icon: CreditCard ,
     },
     {
       title: "Bills",
-      url: "/dashboard/bills",
+      url: "/teacher/dashboard/bills",
       icon: ReceiptText,
     },
     {
       title: "Storefront",
-      url: "/dashboard/storefront",
+      url: "/teacher/dashboard/storefront",
       icon: Store,
     },
     {
       title: "Lesson Plans",
-      url: "/dashboard/lesson-plans",
+      url: "/teacher/dashboard/lesson-plans",
       icon: BookOpenCheck,
     },
     

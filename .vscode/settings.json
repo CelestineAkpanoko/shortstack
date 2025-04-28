@@ -4,5 +4,6 @@
     "typescript.tsserver.experimental.enableProjectDiagnostics": true,
     "cSpell.words": [
         "cuid"
-    ]
+    ],
+    "chat.agent.enabled": false
 }

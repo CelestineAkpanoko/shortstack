@@ -6,6 +6,7 @@ import { Input } from "@/src/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/src/components/ui/select"
 import { updateClass } from "@/src/app/actions/classActions"
 import { useState } from "react"
+import { EmojiPickerButton } from "@/src/components/ui/emoji-picker-button";
 
 interface EditClassFormProps {
   isOpen: boolean
@@ -18,7 +19,6 @@ interface EditClassFormProps {
     day?: string
     time?: string
     grade?: string
-    numberOfStudents?: number
   }
 }
 
@@ -30,13 +30,22 @@ export function EditClassForm({ isOpen, onClose, classData }: EditClassFormProps
     day: classData.day || '',
     time: classData.time || '',
     grade: classData.grade || '',
-    numberOfStudents: classData.numberOfStudents || 0,
   })
 
   const handleUpdate = async () => {
-    const result = await updateClass(classData.id, formData)
+    // Extract only valid fields to send to the server
+    const validFormData = {
+      name: formData.name,
+      emoji: formData.emoji,
+      cadence: formData.cadence,
+      day: formData.day,
+      time: formData.time,
+      grade: formData.grade,
+    };
+    
+    const result = await updateClass(classData.id, validFormData);
     if (result.success) {
-      onClose()
+      onClose();
     }
   }
 
@@ -58,12 +67,11 @@ export function EditClassForm({ isOpen, onClose, classData }: EditClassFormProps
           </div>
 
           <div className="grid gap-2">
-            <label htmlFor="emoji">Emoji</label>
-            <Input
-              id="emoji"
-              placeholder="Emoji"
+            <label htmlFor="emoji">Class Emoji</label>
+            <EmojiPickerButton 
               value={formData.emoji}
-              onChange={(e) => setFormData({ ...formData, emoji: e.target.value })}
+              onChange={(emoji) => setFormData({ ...formData, emoji })}
+              className="w-full text-2xl h-10"
             />
           </div>
 
@@ -126,20 +134,6 @@ export function EditClassForm({ isOpen, onClose, classData }: EditClassFormProps
                 </SelectContent>
               </Select>
             </div>
-
-          <div className="grid gap-2">
-            <label htmlFor="students">Number of Students</label>
-            <Input
-  id="students"
-  type="number"
-  placeholder="Number of Students"
-  value={formData.numberOfStudents || ''}  // Add empty string fallback
-  onChange={(e) => setFormData({ 
-    ...formData, 
-    numberOfStudents: e.target.value ? parseInt(e.target.value) : 0 
-  })}
-/>
-          </div>
         </div>
         <div className="flex justify-end gap-4">
           <Button variant="outline" onClick={onClose}>Cancel</Button>

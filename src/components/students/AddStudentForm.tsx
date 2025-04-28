@@ -39,6 +39,11 @@ export function AddStudentForm({
       // Add flag for password generation
       formData.append('generatePassword', generatePassword.toString());
       
+      // Make sure classCode is in the formData
+      formData.append('classCode', classCode);
+      
+      console.log("Submitting with classCode:", classCode); // Debug log
+      
       const result = await createStudent(formData, classCode);
 
       if (!result.success) {
@@ -59,6 +64,9 @@ export function AddStudentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+      {/* Adding a hidden input field with the class code */}
+      <input type="hidden" name="classCode" value={classCode} />
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="firstName">First Name</Label>

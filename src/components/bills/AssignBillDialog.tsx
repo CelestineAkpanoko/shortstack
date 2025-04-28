@@ -1,25 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog";
 import { Button } from "@/src/components/ui/button";
 import { Label } from "@/src/components/ui/label";
-import { copyBillToClasses } from "@/src/app/actions/billActions";
-import { toast } from "react-hot-toast";
-import { useRouter } from "next/navigation";
+import { Checkbox } from "@/src/components/ui/checkbox";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { copyBillToClasses } from "@/src/app/actions/billActions";
+import { useRouter } from "next/navigation";
 
 interface ClassItem {
   id: string;
   name: string;
   code: string;
   emoji: string;
-  isAssigned?: boolean;
-}
-
-interface BillClass {
-  id: string;
-  name: string;
+  studentCount?: number;
 }
 
 interface AssignBillDialogProps {
@@ -27,7 +23,7 @@ interface AssignBillDialogProps {
   onClose: () => void;
   billId: string;
   billTitle: string;
-  assignedClasses: BillClass[];
+  assignedClasses: Array<{ id: string; name: string; emoji?: string; code?: string }>;
 }
 
 export default function AssignBillDialog({
@@ -35,66 +31,46 @@ export default function AssignBillDialog({
   onClose,
   billId,
   billTitle,
-  assignedClasses,
+  assignedClasses = []
 }: AssignBillDialogProps) {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const router = useRouter();
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [allClasses, setAllClasses] = useState<ClassItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();
 
-  // Get the IDs of classes this bill is already assigned to
-  const assignedClassIds = assignedClasses.map(c => c.id);
-  
-  // Add this ref to track whether we've already fetched classes
-  const hasFetchedRef = useRef(false);
+  // Get the IDs of already assigned classes for filtering
+  const assignedClassIds = assignedClasses.map(cls => cls.id);
 
-  // Fetch available classes when the dialog opens
   useEffect(() => {
-    const fetchClasses = async () => {
-      // Only fetch if the dialog is open and we haven't already fetched
-      if (!isOpen || hasFetchedRef.current) return;
+    // Reset selected classes when dialog opens
+    if (isOpen) {
+      setSelectedClassIds([]);
       
-      setIsLoading(true);
-      try {
-        // Mark that we've started fetching
-        hasFetchedRef.current = true;
-        
-        const response = await fetch("/api/classes");
-        if (response.ok) {
+      // Fetch available classes
+      const fetchClasses = async () => {
+        setIsLoading(true);
+        try {
+          const response = await fetch("/api/classes");
+          if (!response.ok) {
+            throw new Error("Failed to fetch classes");
+          }
           const data = await response.json();
-          
-          // Mark classes that already have this bill
-          const processedClasses = data.classes.map((cls: ClassItem) => ({
-            ...cls,
-            isAssigned: assignedClassIds.includes(cls.id)
-          }));
-          
-          setClasses(processedClasses);
-        } else {
+          setAllClasses(data.classes || []);
+        } catch (error) {
+          console.error("Error fetching classes:", error);
           toast.error("Failed to load classes");
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error("Error fetching classes:", error);
-        toast.error("Could not load classes");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      };
+      
+      fetchClasses();
+    }
+  }, [isOpen]);
 
-    fetchClasses();
-    
-    // Reset the fetch flag when dialog closes
-    return () => {
-      if (!isOpen) {
-        hasFetchedRef.current = false;
-        setSelectedClassIds([]);
-      }
-    };
-  }, [isOpen]); // Only depend on isOpen, not assignedClassIds
-
-  const toggleClassSelection = (classId: string) => {
-    setSelectedClassIds(prev => 
+  const handleToggleClass = (classId: string) => {
+    setSelectedClassIds(prev =>
       prev.includes(classId)
         ? prev.filter(id => id !== classId)
         : [...prev, classId]
@@ -115,111 +91,87 @@ export default function AssignBillDialog({
       });
 
       if (result.success) {
-        toast.success(result.message || "Bill assigned to additional classes");
+        toast.success(result.message || "Bill assigned to classes successfully");
         router.refresh();
         onClose();
       } else {
         toast.error(result.error || "Failed to assign bill to classes");
       }
     } catch (error) {
-      console.error("Error assigning bill:", error);
-      toast.error("An error occurred while assigning bill");
+      console.error("Error assigning bill to classes:", error);
+      toast.error("Failed to assign bill to classes");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Filter out already assigned classes
+  const availableClasses = allClasses.filter(
+    cls => !assignedClassIds.includes(cls.id)
+  );
+
   return (
-    <Dialog 
-      open={isOpen} 
-      onOpenChange={(open) => {
-        if (!open && !isSubmitting) {
-          onClose();
-          // Reset the fetch flag when dialog closes via UI
-          hasFetchedRef.current = false;
-          setSelectedClassIds([]);
-        }
-      }}
-    >
+    <Dialog open={isOpen} onOpenChange={(open) => !isSubmitting && !open && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Assign Bill to Additional Classes</DialogTitle>
+          <DialogTitle>Assign Bill to Classes</DialogTitle>
         </DialogHeader>
 
-        <div className="py-2">
+        <div className="py-4">
           <p className="text-sm text-gray-600 mb-4">
-            Assign "{billTitle}" to additional classes. The bill will appear in both the original and the newly selected classes.
+            Select classes to assign "{billTitle}" to:
           </p>
-
-          <div>
-            <Label className="mb-2 block">Select Classes</Label>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
-              </div>
-            ) : classes.length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                You don't have any classes yet.
-              </div>
-            ) : (
-              <div className="max-h-60 overflow-y-auto border rounded p-2">
-                {classes.map(cls => (
-                  <div 
-                    key={cls.id}
-                    className={`flex items-center gap-2 p-2 rounded cursor-pointer mb-1 ${
-                      cls.isAssigned 
-                        ? "bg-gray-100 text-gray-500" 
-                        : selectedClassIds.includes(cls.id)
-                          ? "bg-blue-100"
-                          : "hover:bg-gray-50"
-                    }`}
-                    onClick={() => !cls.isAssigned && toggleClassSelection(cls.id)}
+          
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+            </div>
+          ) : availableClasses.length > 0 ? (
+            <div className="max-h-60 overflow-y-auto border rounded p-2">
+              {availableClasses.map(cls => (
+                <div
+                  key={cls.id}
+                  className={`flex items-center gap-2 p-2 rounded cursor-pointer mb-1 ${
+                    selectedClassIds.includes(cls.id) ? "bg-gray-100" : "hover:bg-gray-50"
+                  }`}
+                >
+                  <Checkbox
+                    id={`class-${cls.id}`}
+                    checked={selectedClassIds.includes(cls.id)}
+                    onCheckedChange={() => handleToggleClass(cls.id)}
+                  />
+                  <Label
+                    htmlFor={`class-${cls.id}`}
+                    className="flex items-center cursor-pointer flex-1"
+                    onClick={() => handleToggleClass(cls.id)}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedClassIds.includes(cls.id) || cls.isAssigned}
-                      disabled={cls.isAssigned}
-                      onChange={() => !cls.isAssigned && toggleClassSelection(cls.id)}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-xl mr-1">{cls.emoji}</span>
+                    <span className="text-xl mr-2">{cls.emoji}</span>
                     <span>{cls.name}</span>
                     <span className="text-xs text-gray-500 ml-auto">
-                      {cls.code}
+                      {cls.studentCount} students
                     </span>
-                    {cls.isAssigned && (
-                      <span className="text-xs bg-gray-200 px-2 py-1 rounded">
-                        Already assigned
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {!isLoading && classes.length > 0 && selectedClassIds.length === 0 && (
-              <p className="text-xs text-red-500 mt-1">
-                Please select at least one class
-              </p>
-            )}
-          </div>
+                  </Label>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center py-4 text-gray-500">
+              No more classes available. This bill is already assigned to all your classes.
+            </p>
+          )}
 
           <div className="flex justify-end gap-2 mt-6">
-            <Button 
-              type="button" 
-              variant="secondary" 
-              onClick={() => {
-                onClose();
-                // Reset fetch flag on manual close
-                hasFetchedRef.current = false;
-              }}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || selectedClassIds.length === 0}
-              className="min-w-[100px]"
+              disabled={isSubmitting || selectedClassIds.length === 0 || availableClasses.length === 0}
             >
               {isSubmitting ? (
                 <>
@@ -227,7 +179,7 @@ export default function AssignBillDialog({
                   Assigning...
                 </>
               ) : (
-                "Assign Bill"
+                "Assign to Classes"
               )}
             </Button>
           </div>

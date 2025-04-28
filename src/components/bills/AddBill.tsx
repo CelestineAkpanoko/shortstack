@@ -1,16 +1,18 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect, useRef } from "react";
+import { createBill } from "@/src/app/actions/billActions";
 import { useRouter } from "next/navigation";
-import EmojiPicker, { type EmojiClickData } from "emoji-picker-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/src/components/ui/popover"
-import { createBill } from "@/src/app/actions/billActions"
-import { Button } from "@/src/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog"
-import { Input } from "@/src/components/ui/input"
-import { Label } from "@/src/components/ui/label"
-import { toast } from "react-hot-toast"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog";
+import { Input } from "@/src/components/ui/input";
+import { Button } from "@/src/components/ui/button";
+import { Label } from "@/src/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/src/components/ui/popover";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+import { Checkbox } from "@/src/components/ui/checkbox";
+import { EmojiPickerButton } from "@/src/components/ui/emoji-picker-button";
 
 type AddBillProps = {
   isOpen?: boolean;
@@ -18,7 +20,7 @@ type AddBillProps = {
   onSuccess?: () => void;
 };
 
-// Add Class interface
+// Class interface
 interface ClassItem {
   id: string;
   name: string;
@@ -27,9 +29,10 @@ interface ClassItem {
   studentCount: number;
 }
 
-const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
+const AddBill = ({ isOpen = false, onClose, onSuccess }: AddBillProps) => {
   const formRef = useRef<HTMLFormElement>(null);
   const [selectedEmoji, setSelectedEmoji] = useState("💰");
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -38,34 +41,42 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
   const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
 
-  // Fetch classes when component mounts
   useEffect(() => {
-    const fetchClasses = async () => {
-      try {
-        setIsLoadingClasses(true);
-        const response = await fetch('/api/classes');
-        
-        if (response.ok) {
-          const data = await response.json();
-          setClasses(data.classes || []);
-        } else {
-          console.error("Failed to fetch classes");
-          toast.error("Couldn't load your classes");
-        }
-      } catch (error) {
-        console.error("Error fetching classes:", error);
-      } finally {
-        setIsLoadingClasses(false);
-      }
-    };
-
+    // Only fetch classes when dialog is open
     if (isOpen) {
+      const fetchClasses = async () => {
+        setIsLoadingClasses(true);
+        try {
+          const response = await fetch("/api/classes");
+          if (response.ok) {
+            const data = await response.json();
+            setClasses(data.classes || []);
+          } else {
+            toast.error("Failed to fetch classes");
+          }
+        } catch (error) {
+          console.error("Error fetching classes:", error);
+        } finally {
+          setIsLoadingClasses(false);
+        }
+      };
+
       fetchClasses();
+    }
+  }, [isOpen]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedEmoji("💰");
+      setSelectedClassIds([]);
+      formRef.current?.reset();
     }
   }, [isOpen]);
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setSelectedEmoji(emojiData.emoji);
+    setEmojiPickerOpen(false); // Close the emoji picker when an emoji is selected
   };
 
   const toggleClassSelection = (classId: string) => {
@@ -74,6 +85,12 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
         ? prev.filter(id => id !== classId)
         : [...prev, classId]
     );
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    if (!open && !isSubmitting && onClose) {
+      onClose();
+    }
   };
 
   const clientAction = async (formData: FormData) => {
@@ -105,8 +122,8 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
         router.refresh();
         
         // Close dialog and trigger success callback
-        onSuccess?.();
-        onClose?.();
+        if (onSuccess) onSuccess();
+        if (onClose) onClose();
       }
     } catch (error) {
       toast.error("Failed to create bill");
@@ -117,7 +134,7 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={open => !isSubmitting && !open && onClose?.()}>
+    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Create New Bill</DialogTitle>
@@ -125,16 +142,14 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
         
         <form ref={formRef} action={clientAction} className="space-y-4">
           <div className="flex items-center gap-3">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="text-2xl h-14 w-14">
-                  {selectedEmoji}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <EmojiPicker onEmojiClick={handleEmojiClick} />
-              </PopoverContent>
-            </Popover>
+            <EmojiPickerButton 
+              value={selectedEmoji}
+              onChange={(emoji) => {
+                setSelectedEmoji(emoji);
+                setEmojiPickerOpen(false);
+              }}
+              className="text-2xl h-14 w-14"
+            />
             
             <Input
               name="title"
@@ -202,7 +217,7 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
             />
           </div>
 
-          {/* Class selection section */}
+          {/* Class selection section - FIXED to match RemoveBillFromClassesDialog */}
           <div>
             <Label className="mb-2 block">Select Classes</Label>
             {isLoadingClasses ? (
@@ -216,24 +231,28 @@ const AddBill = ({ isOpen, onClose, onSuccess }: AddBillProps) => {
             ) : (
               <div className="max-h-48 overflow-y-auto border rounded p-2">
                 {classes.map(cls => (
-                  <div 
-                    key={cls.id} 
-                    className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 mb-1 ${
-                      selectedClassIds.includes(cls.id) ? "bg-blue-100" : ""
+                  <div
+                    key={cls.id}
+                    className={`flex items-center gap-2 p-2 rounded cursor-pointer mb-1 ${
+                      selectedClassIds.includes(cls.id) ? "bg-gray-100" : "hover:bg-gray-50"
                     }`}
-                    onClick={() => toggleClassSelection(cls.id)}
                   >
-                    <input 
-                      type="checkbox" 
+                    <Checkbox
+                      id={`class-${cls.id}`}
                       checked={selectedClassIds.includes(cls.id)}
-                      onChange={() => toggleClassSelection(cls.id)}
-                      className="h-4 w-4"
+                      onCheckedChange={() => toggleClassSelection(cls.id)}
                     />
-                    <span className="text-xl mr-1">{cls.emoji}</span>
-                    <span>{cls.name}</span>
-                    <span className="text-xs text-gray-500 ml-auto">
-                      {cls.studentCount} students
-                    </span>
+                    <Label
+                      htmlFor={`class-${cls.id}`}
+                      className="flex items-center cursor-pointer flex-1"
+                      onClick={() => toggleClassSelection(cls.id)}
+                    >
+                      <span className="text-xl mr-2">{cls.emoji}</span>
+                      <span>{cls.name}</span>
+                      <span className="text-xs text-gray-500 ml-auto">
+                        {cls.studentCount} students
+                      </span>
+                    </Label>
                   </div>
                 ))}
               </div>

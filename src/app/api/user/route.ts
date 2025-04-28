@@ -1,28 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/src/lib/auth/config";
 
 export async function GET(request: NextRequest) {
   try {
-    // Check if user is authenticated with Clerk
-    const { userId } = await auth();
-    if (!userId) {
+    // Check if user is authenticated with NextAuth
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Get current user details from Clerk
-    const user = await currentUser();
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
-    }
-    
-    // Return normalized user data
+    // Return normalized user data from session
     return NextResponse.json({
       success: true,
       user: {
-        id: user.id,
-        name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User',
-        email: user.emailAddresses[0]?.emailAddress || '',
-        imageUrl: user.imageUrl,
+        id: session.user.id || '',
+        name: session.user.name || 'User',
+        email: session.user.email || '',
+        imageUrl: session.user.image || '',
       }
     });
   } catch (error) {

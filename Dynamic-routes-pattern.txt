@@ -1,0 +1,10 @@
+interface PageProps {
+  params: Promise<{ /* your params types */ }>;
+}
+
+export default async function Page({ params }: PageProps) {
+  // Await the params before using them
+  const { /* your params */ } = await params;
+  
+  // Rest of your component...
+}

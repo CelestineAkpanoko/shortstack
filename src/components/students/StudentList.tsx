@@ -15,10 +15,10 @@ interface Student {
   id: string;
   firstName: string;
   lastName: string;
-  schoolName?: string;
   schoolEmail: string;
   progress: number;
   enrolled: boolean;
+  schoolName?: string; // Add this property
 }
 
 interface StudentListProps {
@@ -34,24 +34,54 @@ export function StudentList({ classCode, maxStudents = Infinity }: StudentListPr
   const [enrollmentStats, setEnrollmentStats] = useState({ total: 0, enrolled: 0 });
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
+  console.log("StudentList received classCode:", classCode);
+
   const loadStudents = async () => {
+    if (!classCode) {
+      console.error("Missing class code in StudentList");
+      toast.error("Configuration error: Missing class code");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      
+      console.log("Fetching students for class:", classCode);
       const result = await getStudentsByClass(classCode);
+      
+      console.log("Student fetch result:", result);
+      
+      if (!result) {
+        console.error("getStudentsByClass returned null or undefined");
+        toast.error("Failed to load students: Server returned no data");
+        setLoading(false);
+        return;
+      }
+      
       if (result.success && result.data) {
-        const studentsWithAllFields = result.data.students.map((student: any) => ({
-          ...student,
-          username: student.username || '',
-          schoolName: student.schoolName || ''
-        }));
-        setStudents(studentsWithAllFields);
-        setEnrollmentStats(result.data.enrollmentStats);
+        if (result.data.students && result.data.enrollmentStats) {
+          setStudents(result.data.students);
+          setEnrollmentStats(result.data.enrollmentStats);
+        } else if (Array.isArray(result.data)) {
+          setStudents(result.data);
+          const totalStudents = result.data.length;
+          const enrolledStudents = result.data.filter(s => s.enrolled).length;
+          setEnrollmentStats({ 
+            total: totalStudents, 
+            enrolled: enrolledStudents 
+          });
+        } else if (result.data.enrollmentStats) {
+          setStudents(result.data.students);
+          setEnrollmentStats(result.data.enrollmentStats);
+        }
       } else {
+        console.error("Student fetch error:", result.error || "Unknown error");
         toast.error(result.error || 'Failed to load students');
       }
     } catch (error) {
       console.error('Error loading students:', error);
-      toast.error('Error loading students');
+      toast.error('Error loading students. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -63,6 +93,14 @@ export function StudentList({ classCode, maxStudents = Infinity }: StudentListPr
 
   const handleDelete = (student: Student) => {
     setStudentToDelete(student);
+  };
+
+  const handleOpenAddDialog = () => {
+    if (!classCode) {
+      toast.error("Missing class code, cannot add students");
+      return;
+    }
+    setShowAddDialog(true);
   };
 
   if (loading) {
@@ -88,19 +126,24 @@ export function StudentList({ classCode, maxStudents = Infinity }: StudentListPr
           </p>
         </div>
         <button
-  onClick={() => setShowAddDialog(true)}
-  className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 cursor-pointer"
->
-  Add Student
-</button>
+          onClick={handleOpenAddDialog}
+          className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 cursor-pointer"
+        >
+          Add Student
+        </button>
       </div>
 
-      {/* Add Student Dialog with Tabs */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add Student</DialogTitle>
           </DialogHeader>
+          
+          {process.env.NODE_ENV !== 'production' && (
+            <div className="text-xs text-muted-foreground mb-2">
+              Debug: Using class code: {classCode}
+            </div>
+          )}
           
           <Tabs defaultValue="new" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -133,7 +176,6 @@ export function StudentList({ classCode, maxStudents = Infinity }: StudentListPr
         </DialogContent>
       </Dialog>
 
-      {/* Edit Student Dialog */}
       <Dialog open={!!editingStudent} onOpenChange={(open) => {
         if (!open) setEditingStudent(null);
       }}>
@@ -146,7 +188,7 @@ export function StudentList({ classCode, maxStudents = Infinity }: StudentListPr
               classCode={classCode}
               student={{
                 ...editingStudent,
-                schoolName: editingStudent?.schoolName || ''
+                schoolName: (editingStudent as any)?.schoolName || ''
               }}
               onClose={() => {
                 setEditingStudent(null);
@@ -221,7 +263,6 @@ export function StudentList({ classCode, maxStudents = Infinity }: StudentListPr
         </div>
       )}
 
-      {/* Delete Student Dialog */}
       <DeleteStudentDialog
         open={!!studentToDelete}
         onOpenChange={(open) => {

@@ -1,45 +1,23 @@
 import { NextResponse } from "next/server";
-import { cookies } from 'next/headers';
-import { verify } from 'jsonwebtoken';
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/src/lib/auth/config";
 import { db } from "@/src/lib/db";
 
 export async function POST(request: Request) {
   try {
-    // Get the auth token from cookies with proper awaiting
-    const cookieStore = await cookies();
-    const token = cookieStore.get('student-auth-token')?.value;
-    
-    if (!token) {
+    // Use NextAuth session for authentication
+    const session = await getServerSession(authOptions);
+
+    // Check if user is authenticated and is a student
+    if (!session || !session.user || session.user.role !== "STUDENT") {
       return NextResponse.json(
-        { success: false, error: "Unauthorized - No token provided" },
+        { success: false, error: "Unauthorized - You must be logged in as a student" },
         { status: 401 }
       );
     }
-    
-    // Get JWT secret from environment, with fallback for development only
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      console.warn("WARNING: JWT_SECRET is not set in environment variables");
-      return NextResponse.json(
-        { success: false, error: "Server configuration error" },
-        { status: 500 }
-      );
-    }
-    
-    // Verify and decode the token
-    let decoded;
-    try {
-      decoded = verify(token, jwtSecret) as { 
-        studentId: string, 
-        email: string 
-      };
-    } catch (tokenError) {
-      console.error("Token verification failed:", tokenError);
-      return NextResponse.json(
-        { success: false, error: "Invalid or expired token" },
-        { status: 401 }
-      );
-    }
+
+    // Get userId/studentId from session
+    const userId = session.user.id;
     
     // Get class code from request
     let classCode;
@@ -62,7 +40,25 @@ export async function POST(request: Request) {
     
     // Find the class
     const classData = await db.class.findUnique({
-      where: { code: classCode }
+      where: { code: classCode },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        emoji: true,
+        time: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            image: true
+          }
+        }
+      }
     });
     
     if (!classData) {
@@ -72,14 +68,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find the student
-    const student = await db.student.findUnique({
-      where: { id: decoded.studentId }
+    // Find the student by user id or email
+    let student = await db.student.findFirst({
+      where: {
+        OR: [
+          { userId: userId },
+          { schoolEmail: session.user.email || "" }
+        ]
+      }
     });
 
     if (!student) {
       return NextResponse.json(
-        { success: false, error: "Student not found" },
+        { success: false, error: "Student profile not found" },
         { status: 404 }
       );
     }
@@ -88,12 +89,19 @@ export async function POST(request: Request) {
     let enrollment = await db.enrollment.findUnique({
       where: { 
         studentId_classId: {
-          studentId: decoded.studentId,
+          studentId: student.id,
           classId: classData.id
         }
       }
     });
     
+    // Format teacher name
+    const teacher = classData.user;
+    const teacherName = teacher?.name || 
+      `${teacher?.firstName || ''} ${teacher?.lastName || ''}`.trim() || 
+      'Your Teacher';
+    
+    // Create or update enrollment
     if (enrollment) {
       // If enrollment exists but not marked as enrolled, update it
       if (!enrollment.enrolled) {
@@ -102,30 +110,42 @@ export async function POST(request: Request) {
           data: { enrolled: true }
         });
         
-        return NextResponse.json({ 
+        return NextResponse.json({
           success: true, 
           message: "Successfully joined class",
           class: {
             id: classData.id,
             name: classData.name,
             code: classData.code,
-            emoji: classData.emoji,
+            emoji: classData.emoji || "📚",
             time: classData.time,
-            createdAt: classData.createdAt
+            createdAt: classData.createdAt,
+            teacher: {
+              id: teacher?.id,
+              name: teacherName,
+              email: teacher?.email,
+              image: teacher?.image
+            }
           }
         });
       } else {
         // Already enrolled
-        return NextResponse.json({ 
+        return NextResponse.json({
           success: true, 
           message: "Already enrolled in this class",
           class: {
             id: classData.id,
             name: classData.name,
             code: classData.code,
-            emoji: classData.emoji,
+            emoji: classData.emoji || "📚",
             time: classData.time,
-            createdAt: classData.createdAt
+            createdAt: classData.createdAt,
+            teacher: {
+              id: teacher?.id,
+              name: teacherName,
+              email: teacher?.email,
+              image: teacher?.image
+            }
           }
         });
       }
@@ -133,22 +153,28 @@ export async function POST(request: Request) {
       // No enrollment exists - create a new enrollment
       enrollment = await db.enrollment.create({
         data: {
-          studentId: decoded.studentId,
+          studentId: student.id,
           classId: classData.id,
           enrolled: true
         }
       });
       
-      return NextResponse.json({ 
+      return NextResponse.json({
         success: true, 
         message: "Successfully joined class",
         class: {
           id: classData.id,
           name: classData.name,
           code: classData.code,
-          emoji: classData.emoji,
+          emoji: classData.emoji || "📚",
           time: classData.time,
-          createdAt: classData.createdAt
+          createdAt: classData.createdAt,
+          teacher: {
+            id: teacher?.id,
+            name: teacherName,
+            email: teacher?.email,
+            image: teacher?.image
+          }
         }
       });
     }

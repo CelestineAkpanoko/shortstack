@@ -1,82 +1,93 @@
 import { NextResponse } from "next/server";
-import { verify } from 'jsonwebtoken';
-import { cookies } from 'next/headers';
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/src/lib/auth/config";
 import { db } from "@/src/lib/db";
 
-export async function GET(request: Request) {
+export async function GET(req: Request) {
   try {
-    // Get the auth token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('student-auth-token')?.value;
-    
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
-    // Verify and decode the token
-    const decoded = verify(
-      token, 
-      process.env.JWT_SECRET || 'fallback-secret-key-for-development'
-    ) as { studentId: string, email: string };
-    
-    // Get student with their enrollments and classes
-    const student = await db.student.findUnique({
-      where: { id: decoded.studentId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        schoolEmail: true,
-        progress: true,
+
+    // First attempt: find student by direct association with user ID
+    let student = await db.student.findFirst({
+      where: { 
+        userId: session.user.id 
+      },
+      include: {
         enrollments: {
           where: { enrolled: true },
           include: {
             class: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-                emoji: true,
-                time: true,
-                createdAt: true
+              include: {
+                user: true // Teacher info
               }
             }
           }
         }
       }
     });
-    
+
+    // Second attempt: if no direct association, check by email
+    if (!student && session.user.email) {
+      student = await db.student.findFirst({
+        where: { 
+          schoolEmail: session.user.email 
+        },
+        include: {
+          enrollments: {
+            where: { enrolled: true },
+            include: {
+              class: {
+                include: {
+                  user: true // Teacher info
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
     if (!student) {
-      return NextResponse.json(
-        { error: "Student not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Student profile not found" }, { status: 404 });
     }
+
+    // Format the enrolled classes
+    const classes = student.enrollments.map(enrollment => ({
+      id: enrollment.class.id,
+      name: enrollment.class.name,
+      code: enrollment.class.code,
+      emoji: enrollment.class.emoji || "📚"
+    }));
     
-    // Extract classes from enrollments
-    const classes = student.enrollments.map(enrollment => enrollment.class);
-    
-    // Remove enrollments from returned student data
-    const { enrollments, ...studentWithoutEnrollments } = student;
-    
+    // Get teacher info from the first enrolled class
+    const teacherInfo = student.enrollments[0]?.class?.user;
+    const teacher = teacherInfo ? {
+      id: teacherInfo.id,
+      name: teacherInfo.name || `${teacherInfo.firstName || ''} ${teacherInfo.lastName || ''}`.trim(),
+      firstName: teacherInfo.firstName,
+      lastName: teacherInfo.lastName,
+      email: teacherInfo.email,
+      image: teacherInfo.image
+    } : null;
+
     return NextResponse.json({
-      student: studentWithoutEnrollments,
-      classes
+      student: {
+        id: student.id,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        schoolEmail: student.schoolEmail,
+        progress: student.progress || {},
+        profileImage: student.profileImage,
+        teacher: teacher
+      },
+      classes: classes
     });
-    
-  } catch (error: any) {
-    console.error("Profile API error:", error);
-    
-    if (error.name === 'JsonWebTokenError') {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-    
-    return NextResponse.json(
-      { error: "Failed to fetch profile" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Error fetching student profile:", error);
+    return NextResponse.json({ error: "Failed to fetch student profile" }, { status: 500 });
   }
 }

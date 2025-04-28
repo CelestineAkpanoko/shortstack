@@ -1,137 +1,216 @@
-'use client'
+"use client";
 
-import { Button } from "@/src/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog"
-import { Input } from "@/src/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/src/components/ui/select"
-import { Textarea } from "@/src/components/ui/textarea"
-import { updateBill } from "@/src/app/actions/billActions"
-import { useState } from "react"
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog";
+import { Input } from "@/src/components/ui/input";
+import { Button } from "@/src/components/ui/button";
+import { Label } from "@/src/components/ui/label";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
+import { EmojiPickerButton } from "@/src/components/ui/emoji-picker-button";
+import { updateBill } from "@/src/app/actions/billActions";
 
-interface EditBillFormProps {
-  isOpen: boolean
-  onClose: () => void
-  billData: {
-    id: string
-    title: string
-    amount: number
-    dueDate: Date
-    frequency: string
-    status: string
-    description?: string
-  }
+interface BillClass {
+  id: string;
+  name: string;
+  emoji: string;
+  code: string;
 }
 
-export function EditBillForm({ isOpen, onClose, billData }: EditBillFormProps) {
-  const [formData, setFormData] = useState({
-    title: billData.title,
-    amount: billData.amount,
-    dueDate: new Date(billData.dueDate).toISOString().split('T')[0],
-    frequency: billData.frequency,
-    status: billData.status,
-    description: billData.description || '',
-  })
+interface EditBillFormProps {
+  isOpen: boolean;
+  onClose: () => void;
+  billData: {
+    id: string;
+    title: string;
+    emoji?: string;
+    amount: number;
+    dueDate: Date;
+    frequency: string;
+    status: string;
+    description?: string;
+    class?: BillClass[];
+  };
+}
 
-  const handleUpdate = async () => {
-    const result = await updateBill(billData.id, formData)
-    if (result.success) {
-      onClose()
+const frequencyOptions = [
+  { value: "ONCE", label: "One Time" },
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "BIWEEKLY", label: "Bi-weekly" },
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "QUARTERLY", label: "Quarterly" },
+  { value: "YEARLY", label: "Yearly" },
+];
+
+const formatDate = (date: string | Date) => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export default function EditBillForm({
+  isOpen,
+  onClose,
+  billData
+}: EditBillFormProps) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  
+  const [title, setTitle] = useState(billData.title);
+  const [emoji, setEmoji] = useState(billData.emoji || "💰");
+  const [amount, setAmount] = useState(billData.amount?.toString() || "0");
+  const [dueDate, setDueDate] = useState(formatDate(billData.dueDate));
+  const [frequency, setFrequency] = useState(billData.frequency);
+  const [description, setDescription] = useState(billData.description || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!title || !amount || !dueDate || !frequency) {
+      toast.error("Please fill all required fields");
+      return;
     }
-  }
-
+    
+    setIsSubmitting(true);
+    
+    try {
+      const result = await updateBill(billData.id, {
+        title,
+        emoji,
+        amount: parseFloat(amount),
+        dueDate: new Date(dueDate),
+        frequency: frequency as any,
+        description
+      });
+      
+      if (result.success) {
+        toast.success("Bill updated successfully");
+        router.refresh();
+        onClose();
+      } else {
+        toast.error(result.error || "Failed to update bill");
+      }
+    } catch (error) {
+      console.error("Error updating bill:", error);
+      toast.error("An error occurred while updating the bill");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={open => !isSubmitting && !open && onClose()}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Update Bill</DialogTitle>
+          <DialogTitle>Edit Bill</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <label htmlFor="title">Bill Title</label>
-            <Input
-              id="title"
-              placeholder="Bill Title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            />
-          </div>
+        
+          
+            <form onSubmit={handleSubmit} ref={formRef} className="space-y-4 pt-4">
+              <div className="flex items-center gap-3">
+                <EmojiPickerButton 
+                  value={emoji}
+                  onChange={setEmoji}
+                />
+                
+                <Input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="Bill title"
+                  className="flex-1"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
 
-          <div className="grid gap-2">
-            <label htmlFor="amount">Amount</label>
-            <Input
-              id="amount"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="amount">Amount</Label>
+                  <Input
+                    id="amount"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="dueDate">Due Date</Label>
+                  <Input
+                    id="dueDate"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    type="date"
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
 
-          <div className="grid gap-2">
-            <label htmlFor="dueDate">Due Date</label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={formData.dueDate}
-              onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-            />
-          </div>
+              <div>
+                <Label htmlFor="frequency">Frequency</Label>
+                <select
+                  id="frequency"
+                  value={frequency}
+                  onChange={e => setFrequency(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  required
+                  disabled={isSubmitting}
+                >
+                  {frequencyOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="grid gap-2">
-            <label>Frequency</label>
-            <Select
-              value={formData.frequency}
-              onValueChange={(value) => setFormData({ ...formData, frequency: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select frequency" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ONCE">One-time</SelectItem>
-                <SelectItem value="WEEKLY">Weekly</SelectItem>
-                <SelectItem value="BIWEEKLY">Bi-weekly</SelectItem>
-                <SelectItem value="MONTHLY">Monthly</SelectItem>
-                <SelectItem value="QUARTERLY">Quarterly</SelectItem>
-                <SelectItem value="YEARLY">Yearly</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-2">
-            <label>Status</label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="PAID">Paid</SelectItem>
-                <SelectItem value="CANCELLED">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-2">
-            <label htmlFor="description">Description</label>
-            <Textarea
-              id="description"
-              placeholder="Bill description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-4">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleUpdate}>Update Bill</Button>
-        </div>
+              <div>
+                <Label htmlFor="description">Description (Optional)</Label>
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  rows={3}
+                  disabled={isSubmitting}
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Bill"
+                  )}
+                </Button>
+              </div>
+            </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

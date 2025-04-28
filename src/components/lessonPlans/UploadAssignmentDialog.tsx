@@ -3,7 +3,6 @@ import { createAssignment } from '@/src/app/actions/assignmentActions';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
 import { Loader2, Upload } from 'lucide-react';
 
 interface AssignmentRecord {
@@ -22,17 +21,15 @@ interface AssignmentRecord {
 export default function UploadAssignmentDialog({
   lessonPlanId,
   onAssignmentUploaded,
+  classId, // Add this prop
 }: {
   lessonPlanId: string;
   onAssignmentUploaded: (assignment: AssignmentRecord) => void;
+  classId: string; // Add this type
 }) {
-  // Get classId from URL params
-  const params = useParams();
-  const classId = params.classId as string;
-  
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [activity, setActivity] = useState('interactive');  // Changed variable name to match schema
+  const [activity, setActivity] = useState('Homework');  // Changed from 'interactive' to 'Homework'
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState('');
@@ -79,11 +76,19 @@ export default function UploadAssignmentDialog({
         }
         
         const uploadData = await uploadRes.json();
-        url = uploadData.url;
+        
+        // Make sure we're using the correct properties from the response
+        if (!uploadData.success) {
+          throw new Error(uploadData.error || 'File upload failed');
+        }
+        
+        url = uploadData.fileUrl || uploadData.url || ''; // Check both possible properties
         fileType = file.type;
         size = file.size;
       }
 
+      console.log('Creating assignment with classId:', classId); // Add debugging
+      
       // Create assignment record using our action
       const res = await createAssignment({
         name,
@@ -92,15 +97,15 @@ export default function UploadAssignmentDialog({
         classId,
         lessonPlanIds: [lessonPlanId],
         url, // Add the file URL if uploaded
-        fileType,
-        size,
+        fileType: fileType || '',
+        size: size || 0,
       });
 
       if (res.success) {
         onAssignmentUploaded(res.data);
         setOpen(false);
         setName('');
-        setActivity('interactive');
+        setActivity('Homework');
         setDueDate('');
         setFile(null);
       } else {
@@ -165,8 +170,9 @@ export default function UploadAssignmentDialog({
             onChange={(e) => setActivity(e.target.value)}
             disabled={isUploading}
           >
-            <option value="interactive">Interactive</option>
-            <option value="presentation">Presentation</option>
+            <option value="Homework">Homework</option>
+            <option value="Writing Assignment">Writing Assignment</option>
+            <option value="Essay">Essay</option>
           </select>
           
           <Input 

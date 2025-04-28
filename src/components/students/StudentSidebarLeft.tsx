@@ -3,11 +3,15 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { useToast } from "@/src/hooks/use-toast";
 import {
   Menu,
   X,
+  ShoppingBag ,
   Home,
-  School,
+  SquarePen,
   Calendar,
   Wallet,
   LogOut,
@@ -15,20 +19,41 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-// Replace these imports with your actual image paths
+// Import images
 import mascot from "@/public/assets/img/Mascout 9ldpi.png";
 import simpleLogo from "@/public/assets/img/logo simple - greenldpi.png";
 
 export function DashboardSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { toast } = useToast();
+  const router = useRouter();
 
   const navItems = [
     { href: "/student/dashboard", icon: Home, label: "Dashboard" },
-    { href: "/student/dashboard/classes", icon: School, label: "Classes" },
+    { href: "/student/dashboard/classes", icon: SquarePen, label: "Classes" },
     { href: "/student/dashboard/calendar", icon: Calendar, label: "Calendar" },
     { href: "/student/dashboard/bank", icon: Wallet, label: "Bank" },
+    { href: "/student/dashboard/storefront", icon: ShoppingBag , label: "Storefront" },
   ];
+  
+  const handleLogout = async () => {
+    try {
+      await signOut({ redirect: false });
+      router.push('/student');
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: "Logout failed",
+        description: "There was a problem logging you out",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <>
@@ -58,9 +83,9 @@ export function DashboardSidebar() {
       >
         {/* Drawer Header */}
         <div className="flex items-center justify-between p-4 border-b bg-[#f1faf3]">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             <Image src={mascot} alt="Mascot" width={32} height={32} />
-            <Image src={simpleLogo} alt="ShortStacks" width={80} height={20} />
+            <Image src={simpleLogo} alt="ShortStacks" width={120} height={32} />
           </div>
           <button
             onClick={() => setIsMobileOpen(false)}
@@ -90,16 +115,15 @@ export function DashboardSidebar() {
 
         {/* Drawer Logout */}
         <div className="mt-2">
-          <Link
-            href="/student"
-            onClick={() => setIsMobileOpen(false)}
-            className="block px-4 py-2 hover:bg-white/50"
+          <button
+            onClick={handleLogout}
+            className="w-full text-left px-4 py-2 hover:bg-white/50"
           >
             <div className="flex items-center gap-2">
               <LogOut className="h-5 w-5" />
               <span className="text-sm md:text-base">Logout</span>
             </div>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -141,15 +165,15 @@ export function DashboardSidebar() {
 
         {/* Logout */}
         <div className="px-2 pb-2">
-          <Link
-            href="/student"
-            className="flex items-center gap-3 px-4 py-2 hover:bg-white/50"
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-white/50"
           >
             <LogOut className="h-5 w-5" />
             {!isCollapsed && (
               <span className="text-sm md:text-base">Logout</span>
             )}
-          </Link>
+          </button>
         </div>
 
         {/* Chevron Toggle at bottom-right */}

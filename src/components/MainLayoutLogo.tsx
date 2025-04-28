@@ -1,7 +1,7 @@
 import Image from "next/image"
 import Link from "next/link"
 
-import main_layout_logo from "@/public/assets/img/Primary Logo - Colorful greenldpi.png"
+import main_layout_logo from "@/public/assets/img/Primary Logo - Colorfu Black Greenldpi.png"
 
 export function MainLayoutLogo() {
   return (

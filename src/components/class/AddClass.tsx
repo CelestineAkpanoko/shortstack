@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/src/components/ui/pop
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog"
 import { createClass } from "@/src/app/actions/classActions"
 import { toast } from "react-toastify"
+import { EmojiPickerButton } from "@/src/components/ui/emoji-picker-button";
 
 type AddClassProps = {
   isOpen?: boolean;
@@ -26,9 +27,14 @@ const AddClass = ({ isOpen, onClose, onSuccess }: AddClassProps) => {
   const [selectedEmoji, setSelectedEmoji] = useState("📚")
 
   const clientAction = async (formData: FormData) => {
-
     try {
+      console.log("Submitting class form data...");
+      
+      // Make sure emoji is included in form data
+      formData.set('emoji', selectedEmoji);
+      
       const result = await createClass(formData);
+      console.log("Create class response:", result);
 
       if (!result.success) {
         toast.error(result.error || "Failed to create class");
@@ -36,12 +42,12 @@ const AddClass = ({ isOpen, onClose, onSuccess }: AddClassProps) => {
         toast.success(`Class created successfully! Class code: ${result.data.code}`);
         formRef.current?.reset();
         setSelectedEmoji("📚"); // Reset emoji
-        onSuccess?.();
+        onSuccess?.(); // This should trigger a refresh in the parent component
         onClose?.();
       }
     } catch (error) {
+      console.error("Create class client error:", error);
       toast.error("Failed to create class");
-      console.error("Create class error:", error);
     }
   }
 
@@ -60,6 +66,16 @@ const AddClass = ({ isOpen, onClose, onSuccess }: AddClassProps) => {
             <div className="space-y-2">
               <Label htmlFor="name">Class Name</Label>
               <Input id="name" name="name" placeholder="Class Name" required />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Class Emoji</Label>
+              <input type="hidden" name="emoji" value={selectedEmoji} />
+              <EmojiPickerButton 
+                value={selectedEmoji}
+                onChange={setSelectedEmoji}
+                className="w-full text-2xl h-10"
+              />
             </div>
 
             <div className="space-y-2">
@@ -123,23 +139,7 @@ const AddClass = ({ isOpen, onClose, onSuccess }: AddClassProps) => {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Class Emoji</Label>
-              <input type="hidden" name="emoji" value={selectedEmoji} />
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full text-2xl h-10">
-                    {selectedEmoji}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0">
-                  <EmojiPicker 
-                    onEmojiClick={onEmojiClick} 
-                    autoFocusSearch={false} 
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            
           </div>
 
           <div className="flex justify-end space-x-4 mt-6">

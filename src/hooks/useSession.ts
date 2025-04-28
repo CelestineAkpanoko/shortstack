@@ -1,11 +1,10 @@
 'use client';
 
 import { useSessionStore } from '@/src/lib/sessionStore';
-import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 
 export function useSession() {
-  const { isSignedIn, signOut } = useAuth();
   const { user, isAuthenticated, logout, updateLastActivity } = useSessionStore();
   const router = useRouter();
 
@@ -22,7 +21,7 @@ export function useSession() {
 
   return {
     user,
-    isAuthenticated: isAuthenticated && !!isSignedIn,
+    isAuthenticated,
     logout: logoutUser,
     extendSession,
   };

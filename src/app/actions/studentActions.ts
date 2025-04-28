@@ -2,9 +2,11 @@
 
 import { db } from "@/src/lib/db";
 import { revalidatePath } from "next/cache";
-import { auth } from "@clerk/nextjs/server";
+import { getAuthSession } from "@/src/lib/auth";
 import * as bcrypt from 'bcryptjs';
 import { sendStudentInvitation } from "@/src/lib/email";
+import { generateAccountNumber } from "@/src/lib/utils";
+import { setupBankAccountsForStudent } from "@/src/lib/banking";
 
 // Utility function to generate random passwords
 function generateRandomPassword(): string {
@@ -18,15 +20,46 @@ function generateRandomPassword(): string {
 
 // Get all students in a class with enrollment counts
 export async function getStudentsByClass(classCode: string) {
+  console.log("Server action getStudentsByClass called with code:", classCode);
+  
   try {
-    const { userId } = await auth();
-    if (!userId) return { success: false, error: "Unauthorized" };
+    const session = await getAuthSession();
+    
+    // Handle missing or invalid session
+    if (!session?.user?.id) {
+      console.error("Unauthorized: No user session");
+      return { success: false, error: "Unauthorized: Please log in" };
+    }
+    
+    if (session.user.role !== "TEACHER") {
+      console.error("Unauthorized: Not a teacher role");
+      return { success: false, error: "Unauthorized: Teacher access required" };
+    }
+
+    if (!classCode) {
+      console.error("Missing classCode parameter");
+      return { success: false, error: "Class code is required" };
+    }
 
     // Find the class by code
-    const classData = await db.class.findUnique({ where: { code: classCode } });
-    if (!classData) return { success: false, error: "Class not found" };
-
-    // console.log("Class data:", classData);
+    const classData = await db.class.findUnique({ 
+      where: { code: classCode },
+      select: { 
+        id: true, 
+        userId: true 
+      }
+    });
+    
+    if (!classData) {
+      console.error(`Class not found with code: ${classCode}`);
+      return { success: false, error: "Class not found" };
+    }
+    
+    // Verify the teacher owns this class
+    if (classData.userId !== session.user.id) {
+      console.error("Access denied: Teacher doesn't own this class");
+      return { success: false, error: "You don't have permission to access this class" };
+    }
 
     // Get students enrolled in the class
     const enrollments = await db.enrollment.findMany({
@@ -40,10 +73,9 @@ export async function getStudentsByClass(classCode: string) {
       firstName: enrollment.student.firstName,
       lastName: enrollment.student.lastName,
       schoolEmail: enrollment.student.schoolEmail,
-      progress: enrollment.student.progress,
+      progress: enrollment.student.progress || 0,
       enrolled: enrollment.enrolled
     }));
-
 
     // Calculate enrollment stats
     const enrollmentStats = {
@@ -51,6 +83,8 @@ export async function getStudentsByClass(classCode: string) {
       enrolled: enrollments.filter(e => e.enrolled).length
     };
 
+    console.log(`Found ${students.length} students for class ${classCode}`);
+    
     return {
       success: true,
       data: {
@@ -60,19 +94,22 @@ export async function getStudentsByClass(classCode: string) {
     };
   } catch (error) {
     console.error("Get students error:", error);
-    return { success: false, error: "Failed to fetch students" };
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to fetch students" 
+    };
   }
 }
 
 // Create a new student and enroll them in a class
 export async function createStudent(formData: FormData, classCode: string) {
   try {
-    const { userId } = await auth();
-    if (!userId) return { success: false, error: "Unauthorized" };
-
-    // Find the class by code
-    const classData = await db.class.findUnique({ where: { code: classCode } });
-    if (!classData) return { success: false, error: "Class not found" };
+    console.log("Starting createStudent with class code:", classCode);
+    
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
 
     // Extract and validate fields
     const firstName = formData.get('firstName')?.toString().trim() || "";
@@ -86,6 +123,16 @@ export async function createStudent(formData: FormData, classCode: string) {
       return { success: false, error: "Missing required fields" };
     }
 
+    // Find the class by code
+    const classData = await db.class.findUnique({ 
+      where: { code: classCode } 
+    });
+    
+    if (!classData) {
+      console.error(`Class not found with code: ${classCode}`);
+      return { success: false, error: "Class not found" };
+    }
+    
     // Check if the student already exists
     let student = await db.student.findUnique({ where: { schoolEmail } });
     
@@ -115,28 +162,45 @@ export async function createStudent(formData: FormData, classCode: string) {
     // If student doesn't exist, create them
     if (!student) {
       const hashedPassword = await bcrypt.hash(finalPassword, 10);
-      student = await db.student.create({
-        data: {
-          firstName,
-          lastName,
-          schoolEmail,
-          password: hashedPassword,
-          progress: 0,
-          class: {
-            connect: { id: classData.id }
+      
+      try {
+        // IMPORTANT: Using classCode here, not classData.id
+        student = await db.student.create({
+          data: {
+            firstName,
+            lastName,
+            schoolEmail,
+            password: hashedPassword,
+            progress: 0,
+            classId: classCode, // Using classCode directly as per your schema
+            teacherId: session.user.name ?? "" // Associate with the teacher, fallback to an empty string
           }
-        }
-      });
+        });
+        console.log("Student created with ID:", student.id);
+      } catch (createError) {
+        console.error("Error creating student:", createError);
+        return { 
+          success: false, 
+          error: "Failed to create student: " + (createError instanceof Error ? createError.message : "Unknown error") 
+        };
+      }
     }
 
-    // Now create the enrollment
-    const enrollment = await db.enrollment.create({
-      data: {
-        studentId: student.id,
-        classId: classData.id,
-        enrolled: false  // Not fully enrolled until the student logs in and joins
-      }
-    });
+    // Now create the enrollment - this needs classData.id
+    try {
+      const enrollment = await db.enrollment.create({
+        data: {
+          studentId: student.id,
+          classId: classData.id, // This uses ID as per your schema
+          enrolled: false  // Not fully enrolled until the student logs in and joins
+        }
+      });
+
+      console.log("Enrollment created successfully");
+    } catch (enrollError) {
+      console.error("Error creating enrollment:", enrollError);
+      // Continue with the process even if enrollment fails
+    }
 
     // Send invitation email with appropriate message based on whether student is new or existing
     const isNewStudent = student.createdAt > new Date(Date.now() - 5000); // Created within last 5 seconds
@@ -168,16 +232,16 @@ Please log in and join the class using the provided code.`
       console.error("Failed to send invitation email:", emailError);
       // Continue with enrollment even if email fails
       // But return a warning to the UI
-      revalidatePath(`/dashboard/classes/${classCode}`);
+      revalidatePath(`/teacher/dashboard/classes/${classCode}`);
       return { 
         success: true, 
-        data: { student, enrollment },
+        data: { student, enrollment: true },
         warning: "Student was added but the invitation email couldn't be sent. Please provide login details manually."
       };
     }
 
-    revalidatePath(`/dashboard/classes/${classCode}`);
-    return { success: true, data: { student, enrollment } };
+    revalidatePath(`/teacher/dashboard/classes/${classCode}`);
+    return { success: true, data: { student, enrollment: true } };
 
   } catch (error: any) {
     console.error("Create student error:", error);
@@ -188,16 +252,42 @@ Please log in and join the class using the provided code.`
 // Add an existing student to a class
 export async function addExistingStudentToClass(studentId: string, classCode: string) {
   try {
-    const { userId } = await auth();
-    if (!userId) return { success: false, error: "Unauthorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
 
     // Find the class by code
-    const classData = await db.class.findUnique({ where: { code: classCode } });
-    if (!classData) return { success: false, error: "Class not found" };
+    const classData = await db.class.findUnique({ 
+      where: { code: classCode },
+      select: { 
+        id: true, 
+        userId: true,
+        name: true,
+        emoji: true
+      }
+    });
+    
+    if (!classData) {
+      return { success: false, error: "Class not found" };
+    }
+    
+    // Verify the teacher owns this class
+    if (classData.userId !== session.user.id) {
+      return { success: false, error: "You don't have permission to access this class" };
+    }
 
     // Check that the student exists
-    const student = await db.student.findUnique({ where: { id: studentId } });
-    if (!student) return { success: false, error: "Student not found" };
+    const student = await db.student.findUnique({ 
+      where: { 
+        id: studentId,
+        teacherId: session.user.id // Ensure the student belongs to this teacher
+      }
+    });
+    
+    if (!student) {
+      return { success: false, error: "Student not found" };
+    }
 
     // Prevent duplicate enrollment - important check
     const existingEnrollment = await db.enrollment.findUnique({
@@ -260,11 +350,24 @@ Please log in and join the class using the provided code.`
 // Get all available students not yet enrolled in the specified class
 export async function getAvailableStudents(classCode: string) {
   try {
-    const { userId } = await auth();
-    if (!userId) return { success: false, error: "Unauthorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
 
-    const classData = await db.class.findUnique({ where: { code: classCode } });
-    if (!classData) return { success: false, error: "Class not found" };
+    const classData = await db.class.findUnique({ 
+      where: { code: classCode },
+      select: { id: true, userId: true }
+    });
+    
+    if (!classData) {
+      return { success: false, error: "Class not found" };
+    }
+    
+    // Verify the teacher owns this class
+    if (classData.userId !== session.user.id) {
+      return { success: false, error: "You don't have permission to access this class" };
+    }
 
     // Get the IDs of students already enrolled in the class
     const enrolledStudentIds = await db.enrollment.findMany({
@@ -275,7 +378,8 @@ export async function getAvailableStudents(classCode: string) {
     // Return students not in the list of enrolled IDs
     const students = await db.student.findMany({
       where: {
-        id: { notIn: enrolledStudentIds }
+        id: { notIn: enrolledStudentIds },
+        teacherId: session.user.id // Only find students created by this teacher
       },
       select: {
         id: true,
@@ -297,9 +401,26 @@ export async function getAvailableStudents(classCode: string) {
 // Student joining a class: update the enrollment record to mark as enrolled
 export async function joinClass(classCode: string, studentId: string) {
   try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     // Find the class by code
     const classData = await db.class.findUnique({ where: { code: classCode } });
     if (!classData) return { success: false, error: "Invalid class code" };
+
+    // Verify student ID belongs to the current user 
+    const student = await db.student.findUnique({
+      where: { 
+        id: studentId,
+        userId: session.user.id // Only allow joining if student belongs to this user
+      }
+    });
+
+    if (!student) {
+      return { success: false, error: "Student not found" };
+    }
 
     // Find the enrollment
     let enrollment = await db.enrollment.findUnique({
@@ -345,12 +466,25 @@ export async function joinClass(classCode: string, studentId: string) {
 // Update student data
 export async function updateStudent(formData: FormData, classCode: string, studentId: string) {
   try {
-    const { userId } = await auth();
-    if (!userId) return { success: false, error: "Unauthorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
 
     // Find the class by code
-    const classData = await db.class.findUnique({ where: { code: classCode } });
-    if (!classData) return { success: false, error: "Class not found" };
+    const classData = await db.class.findUnique({ 
+      where: { code: classCode },
+      select: { id: true, userId: true }
+    });
+    
+    if (!classData) {
+      return { success: false, error: "Class not found" };
+    }
+    
+    // Verify the teacher owns this class
+    if (classData.userId !== session.user.id) {
+      return { success: false, error: "You don't have permission to access this class" };
+    }
 
     // Extract fields from form data
     const firstName = formData.get('firstName')?.toString().trim();
@@ -392,23 +526,32 @@ export async function updateStudent(formData: FormData, classCode: string, stude
   }
 }
 
-
-
-// Completely rewrite the deleteStudent function:
 // Delete a student with options to remove from class or delete completely
-
 export async function deleteStudent(
   classCode: string, 
   studentId: string, 
   options: { removeFromClassOnly: boolean } = { removeFromClassOnly: true }
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) return { success: false, error: "Unauthorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
 
     // Find the class by code
-    const classData = await db.class.findUnique({ where: { code: classCode } });
-    if (!classData) return { success: false, error: "Class not found" };
+    const classData = await db.class.findUnique({ 
+      where: { code: classCode },
+      select: { id: true, userId: true }
+    });
+    
+    if (!classData) {
+      return { success: false, error: "Class not found" };
+    }
+    
+    // Verify the teacher owns this class
+    if (classData.userId !== session.user.id) {
+      return { success: false, error: "You don't have permission to access this class" };
+    }
 
     // Find the enrollment to delete
     const enrollment = await db.enrollment.findFirst({
@@ -496,5 +639,22 @@ export async function deleteStudent(
       success: false, 
       error: error instanceof Error ? error.message : "Failed to delete student"
     };
+  }
+}
+
+// Create bank accounts for a student when they are enrolled
+export async function createStudentBankAccounts(studentId: string) {
+  try {
+    const result = await setupBankAccountsForStudent(studentId);
+    
+    if (result.success) {
+      revalidatePath("/dashboard/bank");
+      return { success: true, data: result.data };
+    } else {
+      return { success: false, error: "An unknown error occurred while creating bank accounts" };
+    }
+  } catch (error) {
+    console.error("Error creating bank accounts:", error);
+    return { success: false, error: "Failed to create bank accounts" };
   }
 }

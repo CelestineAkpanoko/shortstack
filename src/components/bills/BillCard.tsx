@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card } from "../ui/card";
 import { formatCurrency } from "@/src/lib/utils";
 import { useRouter } from "next/navigation";
-import { Copy, MoreHorizontal, Trash } from "lucide-react";
+import { Copy, MoreHorizontal, Trash, Pen } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,8 @@ import {
 } from "../ui/dropdown-menu";
 import AssignBillDialog from "./AssignBillDialog";
 import DeleteBillDialog from "./DeleteBillDialog";
+import EditBillForm from "./EditBillForm";
+import Link from "next/link";
 
 interface BillCardProps {
   id: string;
@@ -25,28 +27,29 @@ interface BillCardProps {
   status: string;
   description?: string;
   backgroundColor: string;
-  classes: Array<{ id: string; name: string }>;
+  classes: Array<{ id: string; name: string; emoji?: string; code?: string }>;
 }
 
-export const BillCard = ({ 
-  id, 
-  title, 
-  emoji, 
-  amount, 
-  dueDate, 
-  frequency, 
-  status, 
+export const BillCard = ({
+  id,
+  title,
+  emoji,
+  amount,
+  dueDate,
+  frequency,
+  status,
+  description,
   backgroundColor,
   classes = [],
-  description
 }: BillCardProps) => {
   const router = useRouter();
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  
+  const [showEditDialog, setShowEditDialog] = useState(false);
+
   // Format the due date
   const formattedDueDate = new Date(dueDate).toLocaleDateString();
-  
+
   // Format the frequency for display
   const getFrequencyDisplay = (freq: string) => {
     switch (freq) {
@@ -61,12 +64,12 @@ export const BillCard = ({
   };
 
   const navigateToBill = () => {
-    router.push(`/dashboard/bills/${id}`);
+    router.push(`/teacher/dashboard/bills/${id}`);
   };
 
   return (
     <>
-      <Card 
+      <Card
         className={`overflow-hidden w-[250px] h-[250px] relative cursor-pointer hover:shadow-md transition-shadow ${backgroundColor}`}
         onClick={navigateToBill}
       >
@@ -83,7 +86,12 @@ export const BillCard = ({
                 Assign to More Classes
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                <Pen className="mr-2 h-4 w-4" />
+                Update Bill
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 onClick={() => setShowDeleteDialog(true)}
                 className="text-red-600 focus:text-red-600"
               >
@@ -102,40 +110,64 @@ export const BillCard = ({
               <p className="text-2xl font-bold">{formatCurrency(amount)}</p>
             </div>
           </div>
-          
+
           <div className="space-y-1 text-sm">
             <p><span className="font-medium">Due:</span> {formattedDueDate}</p>
             <p><span className="font-medium">Frequency:</span> {getFrequencyDisplay(frequency)}</p>
-            
-            {classes.length > 0 && (
-              <div className="mt-3">
-                <p className="font-medium mb-1">Assigned to:</p>
-                <div className="flex flex-wrap gap-1">
-                  {classes.slice(0, 2).map(cls => (
-                    <span key={cls.id} className="bg-white/50 px-2 py-0.5 rounded text-xs">
-                      {cls.name}
-                    </span>
-                  ))}
-                  {classes.length > 2 && (
-                    <span className="bg-white/50 px-2 py-0.5 rounded text-xs">
-                      +{classes.length - 2} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {classes && classes.length > 0 ? (
+                classes.slice(0, 3).map((cls: any) => (
+                  <span key={cls.id} className="inline-flex items-center text-xs bg-white rounded-full px-2 py-1 border">
+                    <span className="mr-1">{cls.emoji}</span>
+                    <span className="truncate max-w-[80px]">{cls.name}</span>
+                  </span>
+                ))
+              ) : (
+                <span className="inline-flex items-center text-xs bg-white rounded-full px-2 py-1 border text-gray-500">
+                  <span className="mr-1">📝</span>
+                  <span>Unassigned</span>
+                </span>
+              )}
+
+              {classes && classes.length > 3 && (
+                <span className="inline-flex items-center text-xs bg-white rounded-full px-2 py-1 border">
+                  +{classes.length - 3} more
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </Card>
-      
-      <AssignBillDialog 
+
+      <AssignBillDialog
         isOpen={showAssignDialog}
         onClose={() => setShowAssignDialog(false)}
         billId={id}
         billTitle={title}
         assignedClasses={classes}
       />
-      
+
+      <EditBillForm
+        isOpen={showEditDialog}
+        onClose={() => setShowEditDialog(false)}
+        billData={{
+          id,
+          title,
+          amount,
+          dueDate,
+          frequency,
+          status,
+          description: description || '',
+          class: classes.map(cls => ({
+            id: cls.id,
+            name: cls.name,
+            emoji: cls.emoji || "📝", // Provide a default emoji if none exists
+            code: cls.code || "" // Ensure code is always a string
+          }))
+        }}
+      />
+
       <DeleteBillDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}

@@ -35,7 +35,7 @@ const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
       e.stopPropagation();
       return;
     }
-    router.push(`/dashboard/classes/${code}`);
+    router.push(`/teacher/dashboard/classes/${code}`);
   };
 
  
@@ -72,8 +72,8 @@ return (
       </div>
 
       <div className="text-4xl mb-4">{emoji}</div>
-      <h3 className="text-xl font-semibold">{name}</h3>
-      <p className="text-sm text-muted-foreground mt-1">Code: {code}</p>
+      <h3 className="text-xl font-semibold text-white">{name}</h3>
+      <p className="text-md text-white mt-1">Code: {code}</p>
       {props.numberOfStudents && (
         <p className="text-sm text-muted-foreground mt-1">
           Capacity: {props.numberOfStudents} students

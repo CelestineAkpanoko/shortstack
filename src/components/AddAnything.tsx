@@ -3,15 +3,22 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/src/components/ui/card";
 import { Plus } from "lucide-react";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/components/ui/dialog";
 
 interface AddAnythingProps {
   title: string;
-  FormComponent: React.ComponentType<{ isOpen: boolean; onClose: () => void; onSuccess: () => void }>;
+  FormComponent: React.ComponentType<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; onClassJoined?: (newClass: any) => void }>;
+  onItemAdded?: (newItem: any) => void;
 }
 
-const AddAnything: React.FC<AddAnythingProps> = ({ title, FormComponent }) => {
+const AddAnything: React.FC<AddAnythingProps> = ({ title, FormComponent, onItemAdded }) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  const handleClose = () => setIsOpen(false);
+  
+  const handleSuccess = () => {
+    setIsOpen(false);
+  };
 
   return (
     <>
@@ -31,13 +38,19 @@ const AddAnything: React.FC<AddAnythingProps> = ({ title, FormComponent }) => {
         </CardContent>
       </Card>
 
-      {isOpen && (
-        <FormComponent
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          onSuccess={() => setIsOpen(false)}
-        />
-      )}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <FormComponent
+            isOpen={isOpen}
+            onClose={handleClose}
+            onSuccess={handleSuccess}
+            onClassJoined={onItemAdded}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

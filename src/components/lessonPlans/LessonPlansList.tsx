@@ -35,9 +35,9 @@ export default function LessonPlansList({ classCode, cName }: LessonPlansListPro
     <div className="space-y-6">
       <Breadcrumbs
         items={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: cName, href: `/dashboard/classes/${classCode}` },
-          { label: 'Lesson Plans', href: `/dashboard/classes/${classCode}/lesson-plans` },
+          { label: 'Dashboard', href: '/teacher/dashboard' },
+          { label: cName, href: `/teacher/dashboard/classes/${classCode}` },
+          { label: 'Lesson Plans', href: `/teacher/dashboard/classes/${classCode}/lesson-plans` },
         ]}
       />
       <h2 className="text-xl font-semibold">Lesson Plans</h2>
@@ -46,7 +46,12 @@ export default function LessonPlansList({ classCode, cName }: LessonPlansListPro
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {lessonPlans.map((plan) => (
-            <LessonPlanCard key={plan.id} plan={plan} classCode={classCode} />
+            <LessonPlanCard 
+              key={plan.id} 
+              plan={plan} 
+              classCode={classCode}
+              onUpdate={fetchLessonPlans} // Pass the fetch function to update when changes happen
+            />
           ))}
           <AddLessonPlanCard onClick={() => setIsDialogOpen(true)} />
         </div>

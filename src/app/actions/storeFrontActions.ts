@@ -1,8 +1,9 @@
 "use server";
 
 import { db } from "@/src/lib/db";
+import { getAuthSession } from "@/src/lib/auth";
 import { revalidatePath } from "next/cache";
-import { auth } from "@clerk/nextjs/server";
+import { PurchaseStatus } from "@prisma/client"; // Import enum
 
 // Types
 interface CreateStoreItemData {
@@ -12,15 +13,16 @@ interface CreateStoreItemData {
   description?: string;
   quantity: number;
   isAvailable: boolean;
+  classId: string; // Item must belong to a class
 }
 
 interface UpdateStoreItemData {
-  name: string;
-  emoji: string;
-  price: number;
+  name?: string;
+  emoji?: string;
+  price?: number;
   description?: string;
-  quantity: number;
-  isAvailable: boolean;
+  quantity?: number;
+  isAvailable?: boolean;
 }
 
 interface StoreItemResponse {
@@ -30,333 +32,121 @@ interface StoreItemResponse {
   message?: string;
 }
 
-// Create a new store item
-export async function createStoreItem(
-  formData: FormData
-): Promise<StoreItemResponse> {
+// Create a new store item (Teacher only)
+export async function createStoreItem(formData: FormData): Promise<StoreItemResponse> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
     }
-    
-    const data: CreateStoreItemData = {
-      name: formData.get("name") as string,
-      emoji: (formData.get("emoji") as string) || "🛍️",
-      price: parseFloat(formData.get("price") as string),
-      description: formData.get("description") as string,
-      quantity: parseInt(formData.get("quantity") as string, 10) || 0,
-      isAvailable: formData.get("isAvailable") === "true",
-    };
 
-    // Get class IDs - now supporting multiple classes
-    const classIds = formData.getAll("classIds") as string[];
+    const name = formData.get("name") as string;
+    const emoji = formData.get("emoji") as string;
+    const price = parseFloat(formData.get("price") as string);
+    const quantity = parseInt(formData.get("quantity") as string, 10);
+    const isAvailable = formData.get("isAvailable") === 'true';
+    const description = formData.get("description") as string | undefined;
+    const classId = formData.get("classId") as string;
 
-    // Validate required fields
-    if (!data.name || isNaN(data.price)) {
+    if (!name || !emoji || isNaN(price) || isNaN(quantity) || !classId) {
       return { success: false, error: "Missing required fields" };
     }
 
-    if (!classIds.length) {
-      return { success: false, error: "At least one class must be selected" };
-    }
-
-    // Verify that all classes belong to this user
-    const classes = await db.class.findMany({
-      where: {
-        id: { in: classIds },
-        userId: userId
-      }
+    // Verify teacher owns the class
+    const classObj = await db.class.findUnique({
+      where: { id: classId },
+      select: { userId: true, code: true }
     });
 
-    // If any class doesn't belong to this user or doesn't exist
-    if (classes.length !== classIds.length) {
-      return { success: false, error: "One or more selected classes are invalid" };
+    if (!classObj || classObj.userId !== session.user.id) {
+      return { success: false, error: "Class not found or access denied" };
     }
 
-    // Create the store item with class assignments
     const newItem = await db.storeItem.create({
       data: {
-        ...data,
-        class: {
-          connect: classIds.map(id => ({ id }))
-        }
+        name,
+        emoji,
+        price,
+        description,
+        quantity,
+        isAvailable,
+        classId,
       },
-      include: {
-        class: true
-      }
     });
 
-    revalidatePath("/dashboard/storefront");
+    revalidatePath(`/dashboard/classes/${classObj.code}/store`);
     return { success: true, data: newItem };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create store item error:", error);
     return { success: false, error: "Failed to create store item" };
   }
 }
 
-// Get store items across all classes for the current user
-export async function getAllStoreItems(filters?: {
-  classId?: string;
-}): Promise<StoreItemResponse> {
+// Get all store items for a class (Teacher owner or enrolled Student)
+export async function getStoreItems(classId: string): Promise<StoreItemResponse> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
     }
 
-    // All store items must be associated with a class owned by this user
-    let whereClause: any = {
-      class: {
-        some: {
-          userId: userId
-        }
-      }
-    };
+    // Verify class exists
+    const classObj = await db.class.findUnique({
+      where: { id: classId },
+      select: { userId: true, code: true }
+    });
+    if (!classObj) {
+      return { success: false, error: "Class not found" };
+    }
 
-    // Add class filter if provided
-    if (filters?.classId) {
-      whereClause = {
-        class: {
-          some: { 
-            id: filters.classId,
-            userId
-          }
+    // Authorization check
+    let authorized = false;
+    if (session.user.role === "TEACHER" && classObj.userId === session.user.id) {
+        authorized = true;
+    } else if (session.user.role === "STUDENT") {
+        const enrollment = await db.enrollment.findFirst({
+            where: { classId: classId, student: { userId: session.user.id }, enrolled: true }
+        });
+        if (enrollment) {
+            authorized = true;
         }
-      };
+    }
+
+    if (!authorized) {
+        return { success: false, error: "Forbidden: You do not have access to this class store" };
     }
 
     const items = await db.storeItem.findMany({
-      where: whereClause,
-      include: {
-        class: {
-          select: {
-            id: true,
-            name: true,
-            emoji: true,
-            code: true,
-          },
-        },
-        purchases: {
-          include: {
-            student: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                profileImage: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
+      where: { classId: classId },
+      orderBy: { name: 'asc' }
     });
 
     return { success: true, data: items };
-  } catch (error) {
-    console.error("Error fetching store items:", error);
-    return { success: false, error: "Failed to fetch store items" };
-  }
-}
-
-// Get a single Store Item - ensure it belongs to the user
-export async function getStoreItem(storeItemId: string): Promise<StoreItemResponse> {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "User not found" };
-    }
-
-    const storeItem = await db.storeItem.findFirst({
-      where: {
-        id: storeItemId,
-        class: {
-          some: {
-            userId: userId
-          }
-        }
-      },
-      include: {
-        class: {
-          select: {
-            id: true,
-            name: true,
-            emoji: true,
-            code: true,
-          },
-        },
-        purchases: {
-          include: {
-            student: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                profileImage: true
-              }
-            }
-          }
-        }
-      },
-    });
-
-    if (!storeItem) {
-      return { success: false, error: "Store item not found or doesn't belong to you" };
-    }
-
-    return { success: true, data: storeItem };
-  } catch (error) {
-    console.error("Error fetching store item:", error);
-    return { success: false, error: "Failed to fetch store item details" };
-  }
-}
-
-// Get all store items for the current user
-export async function getStoreItems(classId?: string): Promise<StoreItemResponse> {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
-    }
-
-    // All store items must be associated with a class owned by this user
-    let whereClause: any = {
-      class: {
-        some: {
-          userId
-        }
-      }
-    };
-
-    // Add class filter if provided
-    if (classId) {
-      whereClause = {
-        class: {
-          some: { 
-            id: classId,
-            userId
-          }
-        }
-      };
-    }
-
-    const items = await db.storeItem.findMany({
-      where: whereClause,
-      include: {
-        class: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            emoji: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return { success: true, data: items };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get store items error:", error);
     return { success: false, error: "Failed to fetch store items" };
   }
 }
 
-interface CopyStoreItemToClassParams {
-  storeItemId: string;
-  targetClassIds: string[];
-}
-
-// Copy a store item to multiple classes
-export async function copyStoreItemToClasses({
-  storeItemId,
-  targetClassIds
-}: CopyStoreItemToClassParams): Promise<StoreItemResponse> {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
-    }
-
-    // 1. Verify the item exists and belongs to this user
-    const originalItem = await db.storeItem.findFirst({
-      where: {
-        id: storeItemId,
-        class: {
-          some: {
-            userId
-          }
-        }
-      },
-      include: {
-        class: true
-      }
-    });
-
-    if (!originalItem) {
-      return { success: false, error: "Store item not found or doesn't belong to you" };
-    }
-
-    // 2. Verify all target classes belong to this user
-    const targetClasses = await db.class.findMany({
-      where: {
-        id: { in: targetClassIds },
-        userId
-      }
-    });
-
-    if (targetClasses.length !== targetClassIds.length) {
-      return { success: false, error: "One or more target classes are invalid" };
-    }
-
-    // 3. Check which classes the item is already assigned to
-    const existingClassIds = originalItem.class.map(cls => cls.id);
-    
-    // Filter out classes that already have this item
-    const newClassIds = targetClassIds.filter(id => !existingClassIds.includes(id));
-    
-    if (newClassIds.length === 0) {
-      return { success: false, error: "Item is already assigned to all selected classes" };
-    }
-
-    // 4. Update the store item to add the new class connections
-    const updatedItem = await db.storeItem.update({
-      where: { id: storeItemId },
-      data: {
-        class: {
-          connect: newClassIds.map(id => ({ id }))
-        }
-      },
-      include: {
-        class: true
-      }
-    });
-
-    revalidatePath("/dashboard/storefront");
-    revalidatePath("/dashboard/classes");
-    
-    return { 
-      success: true,
-      message: `Item assigned to ${newClassIds.length} additional ${newClassIds.length === 1 ? 'class' : 'classes'}`,
-      data: updatedItem
-    };
-  } catch (error) {
-    console.error("Copy store item error:", error);
-    return { success: false, error: "Failed to assign store item to classes" };
-  }
-}
-
-
-// Update a store item
+// Update a store item (Teacher only)
 export async function updateStoreItem(
   id: string,
   data: UpdateStoreItemData
 ): Promise<StoreItemResponse> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify teacher owns the class associated with the item
+    const item = await db.storeItem.findUnique({
+      where: { id },
+      include: { class: { select: { userId: true, code: true } } }
+    });
+
+    if (!item || item.class.userId !== session.user.id) {
+      return { success: false, error: "Forbidden or Item not found" };
     }
 
     const updatedItem = await db.storeItem.update({
@@ -364,109 +154,150 @@ export async function updateStoreItem(
       data,
     });
 
-    revalidatePath("/dashboard/storefront");
+    revalidatePath(`/dashboard/classes/${item.class.code}/store`);
     return { success: true, data: updatedItem };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update store item error:", error);
     return { success: false, error: "Failed to update store item" };
   }
 }
 
-// Delete a store item
+// Delete a store item (Teacher only)
 export async function deleteStoreItem(id: string): Promise<StoreItemResponse> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
     }
 
-    await db.storeItem.delete({
+    // Verify teacher owns the class associated with the item
+    const item = await db.storeItem.findUnique({
       where: { id },
+      include: { class: { select: { userId: true, code: true } } }
     });
 
-    revalidatePath("/dashboard/storefront");
+    if (!item || item.class.userId !== session.user.id) {
+      return { success: false, error: "Forbidden or Item not found" };
+    }
+
+    // Delete associated purchases first (or use cascade delete)
+    await db.studentPurchase.deleteMany({ 
+      where: { 
+        itemId: id // Change storeItemId to itemId if that's what your schema uses
+      } 
+    });
+
+    await db.storeItem.delete({ where: { id } });
+
+    revalidatePath(`/dashboard/classes/${item.class.code}/store`);
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Delete store item error:", error);
     return { success: false, error: "Failed to delete store item" };
   }
 }
 
-// Assign class to store item
-export async function assignClassToStoreItem(
-  itemId: string,
-  classId: string
-): Promise<StoreItemResponse> {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
-    }
-
-    const updatedItem = await db.storeItem.update({
-      where: { id: itemId },
-      data: { classId }
-    });
-
-    revalidatePath("/dashboard/storefront");
-    return { success: true, data: updatedItem };
-  } catch (error) {
-    console.error("Assign class error:", error);
-    return { success: false, error: "Failed to assign class to store item" };
-  }
-}
-
-// Purchase a store item
+// Purchase a store item (Student only)
 export async function purchaseStoreItem(
   itemId: string,
-  studentId: string,
+  // studentId is derived from session
   quantity: number
 ): Promise<StoreItemResponse> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return { success: false, error: "Not authorized" };
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "STUDENT") {
+      return { success: false, error: "Unauthorized: Only students can purchase items" };
     }
 
+    // Find the student record associated with the user
+    const student = await db.student.findUnique({
+      where: { id: session.user.id },
+      include: { bankAccounts: true }
+    });
+
+    if (!student) {
+      return { success: false, error: "Student not found" };
+    }
+
+    if (quantity <= 0) {
+      return { success: false, error: "Quantity must be positive" };
+    }
+
+    // Assuming the student has a checking account
+    const checkingAccount = student.bankAccounts.find(
+      acc => acc.accountType === "CHECKING"
+    );
+
+    // Get item details to calculate total price
     const item = await db.storeItem.findUnique({
       where: { id: itemId },
     });
-
+    
     if (!item) {
       return { success: false, error: "Item not found" };
     }
+    
+    const totalPrice = item.price * quantity;
 
-    if (!item.isAvailable) {
-      return { success: false, error: "Item is not available" };
+    if (!checkingAccount || checkingAccount.balance < totalPrice) {
+      return { success: false, error: "Insufficient funds" };
     }
 
-    if (item.quantity < quantity) {
-      return { success: false, error: "Insufficient quantity available" };
-    }
-
-    // Create purchase record and update item quantity in a transaction
-    const [purchase] = await db.$transaction([
-      db.studentPurchase.create({
-        data: {
-          itemId,
-          studentId,
-          quantity,
-          totalPrice: item.price * quantity,
-          status: "PENDING",
-        },
-      }),
-      db.storeItem.update({
+    // Use transaction for purchase logic
+    const result = await db.$transaction(async (tx) => {
+      // Get item details and lock the row for update
+      const item = await tx.storeItem.findUnique({
         where: { id: itemId },
-        data: {
-          quantity: item.quantity - quantity,
-        },
-      }),
-    ]);
+      });
 
-    revalidatePath("/dashboard/storefront");
-    return { success: true, data: purchase };
-  } catch (error) {
+      if (!item) throw new Error("Item not found");
+      if (!item.isAvailable) throw new Error("Item is not available for purchase");
+      if (item.quantity < quantity) throw new Error("Insufficient stock available");
+
+      const totalPrice = item.price * quantity;
+
+      // Update the bank account balance instead
+      await tx.bankAccount.update({
+        where: { id: checkingAccount.id },
+        data: { balance: { decrement: totalPrice } }
+      });
+
+      // Decrement item quantity
+      const updatedItem = await tx.storeItem.update({
+        where: { id: itemId },
+        data: { quantity: { decrement: quantity } }
+      });
+
+      // Create purchase record
+      const purchase = await tx.studentPurchase.create({
+        data: {
+          studentId: student.id,
+          itemId: itemId, // Changed from storeItemId to itemId
+          quantity: quantity,
+          totalPrice: totalPrice, // Changed from price to amount, assuming this is the correct field name
+          status: "PAID", // Changed from COMPLETED to PAID if that's what your enum allows
+        }
+      });
+
+      return { purchase, updatedItem };
+    });
+
+    // Revalidate relevant paths (e.g., student balance display, store item list)
+    // Need class code for revalidation
+    const itemClass = await db.storeItem.findUnique({ where: { id: itemId }, select: { class: { select: { code: true } } } });
+    if (itemClass) {
+      revalidatePath(`/dashboard/classes/${itemClass.class.code}/store`);
+      // Revalidate student-specific pages if applicable
+    }
+
+    return { success: true, data: result.purchase };
+
+  } catch (error: any) {
     console.error("Purchase store item error:", error);
-    return { success: false, error: "Failed to process purchase" };
+    // Check for specific transaction errors (e.g., insufficient balance/stock)
+    if (error.message === "Insufficient balance" || error.message === "Insufficient stock available" || error.message === "Item not found" || error.message === "Item is not available for purchase") {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: "Failed to purchase item" };
   }
 }

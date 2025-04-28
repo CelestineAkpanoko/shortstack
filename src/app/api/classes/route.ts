@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/src/lib/auth/config";
 import { db } from "@/src/lib/db";
 
 export async function GET() {
   try {
-    const { userId } = await auth();
+    const session = await getServerSession(authOptions);
     
-    if (!userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
     // Get all classes for this teacher/user
     const classes = await db.class.findMany({
-      where: { userId },
+      where: { userId: session.user.id },
       select: {
         id: true,
         name: true,
