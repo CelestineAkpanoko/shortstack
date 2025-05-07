@@ -62,7 +62,7 @@ export default async function StoreItemPage({ params }: PageProps) {
       <div className="mb-6 flex justify-between items-center">
         <div className="flex items-center">
           <Link
-            href="/dashboard/storefront"
+            href="/teacher/dashboard/storefront"
             className="mr-2 flex items-center text-gray-500 hover:text-gray-700"
           >
             <ChevronLeft className="h-4 w-4" />

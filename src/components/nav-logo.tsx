@@ -26,16 +26,16 @@ export function NavLogo({
               <Image 
                 src={item.icon} 
                 alt="Icon" 
-                width={35} 
-                height={35}
+                width={40} 
+                height={40}
                 // style={{ width: "auto", height: "auto" }} 
               />
               <Image 
                 src={item.title} 
                 alt="Title" 
-                width={110} 
-                height={100}
-                style={{ width: "auto", height: "auto" }}
+                width={120} 
+                height={110}
+                // style={{ width: "auto", height: "auto" }}
               />
             </a>
           </SidebarMenuButton>

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { getLessonPlansByClass } from '@/src/app/actions/lessonPlansActions';
-import  LessonPlanCard from '@/src/components/lesson_plans/LessonPlanCard';
-import AddLessonPlanCard from '@/src/components/lesson_plans/AddLessonPlanCard';
-import AddLessonPlanDialog from '@/src/components/lesson_plans/AddLessonPlanDialog';
+import  LessonPlanCard from '@/src/components/lessonPlans/LessonPlanCard';
+import AddLessonPlanCard from '@/src/components/lessonPlans/AddLessonPlanCard';
+import AddLessonPlanDialog from '@/src/components/lessonPlans/AddLessonPlanDialog';
 import Breadcrumbs from '@/src/components/Breadcrumbs';
 
 interface LessonPlansListProps {

@@ -91,7 +91,7 @@ export default function DeleteStoreItemDialog({
                 Deleting...
               </>
             ) : (
-              "Delete Bill"
+              "Delete Store Item"
             )}
           </Button>
         </div>

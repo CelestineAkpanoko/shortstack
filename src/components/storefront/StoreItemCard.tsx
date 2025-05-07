@@ -53,7 +53,7 @@ export function StoreItemCard({
   const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const navigateToStoreItem = () => {
-    router.push(`/dashboard/storefront/${id}`);
+    router.push(`/teacher/dashboard/storefront/${id}`);
   };
 
   return (

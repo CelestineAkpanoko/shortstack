@@ -115,7 +115,7 @@ export async function updateGenericLessonPlan(
     select: { role: true },
   });
 
-  if (user?.role !== "SUPER_USER") {
+  if (user?.role !== "SUPER") {
     return { success: false, error: "Not authorized to update generic lesson plans" };
   }
 

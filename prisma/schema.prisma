@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   TEACHER
   STUDENT
+  SUPER
 }
 
 
@@ -66,6 +67,7 @@ model Account {
   @@unique([provider, providerAccountId])
 }
 
+// class
 model Class {
   id              String    @id @default(cuid())
   name            String
@@ -86,7 +88,7 @@ model Class {
   lessonPlans     LessonPlan[]
   enrollments     Enrollment[]
   bills           Bill[]
-  storeItems      StoreItem[]
+  storeItems      StoreItem[]  @relation("StoreItemToClass") // Many-to-many relation
   assignments     Assignment[] @relation("ClassAssignments") 
   files           File[]       @relation("ClassFiles")
   
@@ -131,13 +133,12 @@ model Enrollment {
   class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, classId])
 }
 
-model GenericLessonPlan {
+
+model LessonPlan {
   id          String       @id @default(cuid())
   name        String
   description String?
@@ -149,11 +150,27 @@ model GenericLessonPlan {
   // Other relations
   files       File[]       @relation("LessonPlanFiles")
   assignmentRelations Assignment[] @relation("LessonPlanAssignments")
+
+  // Generic lesson plan relation
+  genericLessonPlanId String?
+  genericLessonPlan   GenericLessonPlan? @relation(fields: [genericLessonPlanId], references: [id], onDelete: SetNull, name: "GenericToUserLessonPlans")
   
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   
   @@index([classId])
+}
+
+model GenericLessonPlan {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdBy   String?
+  assignments Assignment[] @relation("GenericLessonPlanAssignments")
+  files       File[]       @relation("GenericLessonPlanFiles")
+  lessonPlans LessonPlan[] @relation("GenericToUserLessonPlans") // Add this relation
 }
 
 model File {
@@ -165,6 +182,7 @@ model File {
   url         String
   classId     String
   lessonPlans LessonPlan[] @relation("LessonPlanFiles")
+  GenericLessonPlan GenericLessonPlan[] @relation("GenericLessonPlanFiles")
   class       Class        @relation("ClassFiles", fields: [classId], references: [code], onDelete: Cascade)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -181,6 +199,7 @@ model Assignment {
   rubric      String?
   classId     String
   lessonPlans LessonPlan[] @relation("LessonPlanAssignments")
+  GenericLessonPlan GenericLessonPlan[] @relation("GenericLessonPlanAssignments")
   class       Class        @relation("ClassAssignments", fields: [classId], references: [code], onDelete: Cascade)
   
   // Add this relation
@@ -221,6 +240,7 @@ model StudentAssignmentSubmission {
 model Bill {
   id          String        @id @default(cuid())
   title       String
+  emoji       String        @default("💰")
   amount      Float
   dueDate     DateTime
   description String?
@@ -280,7 +300,7 @@ model Payment {
 }
 
 model StoreItem {
-  id          String            @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   emoji       String
   price       Float
@@ -290,7 +310,7 @@ model StoreItem {
   
   // Class relation
   classId     String
-  class       Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class       Class[]   @relation("StoreItemToClass") // Many-to-many relation
   
   // Other relations
   purchases   StudentPurchase[]
@@ -302,56 +322,20 @@ model StoreItem {
 }
 
 model StudentPurchase {
-  id          String         @id @default(cuid())
+  id          String    @id @default(cuid())
   itemId      String
   studentId   String
-  quantity    Int            @default(1)
+  quantity    Int       @default(1)
   totalPrice  Float
   status      PurchaseStatus @default(PENDING)
-  purchasedAt DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  item        StoreItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  student     Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  item        StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  purchasedAt DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@unique([itemId, studentId])
   @@index([itemId])
   @@index([studentId])
-}
-
-model BankAccount {
-  id                                                      String        @id
-  accountNumber                                           String        @unique @db.VarChar(12)
-  accountType                                             AccountType
-  balance                                                 Float         @default(0)
-  studentId                                               String
-  createdAt                                               DateTime      @default(now())
-  updatedAt                                               DateTime
-  Student                                                 Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  Transaction_Transaction_accountIdToBankAccount          Transaction[] @relation("Transaction_accountIdToBankAccount")
-  Transaction_Transaction_receivingAccountIdToBankAccount Transaction[] @relation("Transaction_receivingAccountIdToBankAccount")
-
-  @@index([studentId])
-}
-
-model Transaction {
-  id                                                      String          @id
-  amount                                                  Float
-  description                                             String
-  transactionType                                         TransactionType
-  accountId                                               String
-  receivingAccountId                                      String?
-  createdAt                                               DateTime        @default(now())
-  BankAccount_Transaction_accountIdToBankAccount          BankAccount     @relation("Transaction_accountIdToBankAccount", fields: [accountId], references: [id], onDelete: Cascade)
-  BankAccount_Transaction_receivingAccountIdToBankAccount BankAccount?    @relation("Transaction_receivingAccountIdToBankAccount", fields: [receivingAccountId], references: [id])
-
-  @@index([accountId])
-  @@index([receivingAccountId])
-}
-
-enum LessonPlanStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
 }
 
 enum PurchaseStatus {
@@ -360,13 +344,13 @@ enum PurchaseStatus {
   CANCELLED
 }
 
+
 enum BillStatus {
   PENDING
   ACTIVE
   PAID
   CANCELLED
 }
-
 enum BillFrequency {
   ONCE
   WEEKLY

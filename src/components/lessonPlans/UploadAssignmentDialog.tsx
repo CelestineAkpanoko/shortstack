@@ -1,3 +1,5 @@
+'use client';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
 import { createAssignment } from '@/src/app/actions/assignmentActions';
 import { Button } from '@/src/components/ui/button';

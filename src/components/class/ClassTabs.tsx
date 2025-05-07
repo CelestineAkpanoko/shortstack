@@ -3,7 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { StudentList } from '../students/StudentList';
 // import { LessonPlans} from '@/src/components/class/LessonPlans';
-import LessonPlansList  from '@/src/components/lesson_plans/LessonPlansList';
+import LessonPlansList  from '@/src/components/lessonPlans/LessonPlansList';
 import ClassOverview from './ClassOverview';
 
 interface ClassTabsProps {

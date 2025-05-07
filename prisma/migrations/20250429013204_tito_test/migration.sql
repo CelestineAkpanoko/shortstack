@@ -155,6 +155,25 @@ CREATE TABLE "Assignment" (
 );
 
 -- CreateTable
+CREATE TABLE "StudentAssignmentSubmission" (
+    "id" TEXT NOT NULL,
+    "assignmentId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "fileUrl" TEXT,
+    "textContent" TEXT,
+    "comments" TEXT,
+    "fileName" TEXT,
+    "fileType" TEXT,
+    "fileSize" INTEGER,
+    "grade" INTEGER,
+    "status" TEXT NOT NULL DEFAULT 'SUBMITTED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "StudentAssignmentSubmission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Bill" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -316,6 +335,12 @@ CREATE UNIQUE INDEX "Enrollment_studentId_classId_key" ON "Enrollment"("studentI
 CREATE INDEX "LessonPlan_classId_idx" ON "LessonPlan"("classId");
 
 -- CreateIndex
+CREATE INDEX "StudentAssignmentSubmission_assignmentId_idx" ON "StudentAssignmentSubmission"("assignmentId");
+
+-- CreateIndex
+CREATE INDEX "StudentAssignmentSubmission_studentId_idx" ON "StudentAssignmentSubmission"("studentId");
+
+-- CreateIndex
 CREATE INDEX "Bill_creatorId_idx" ON "Bill"("creatorId");
 
 -- CreateIndex
@@ -389,6 +414,12 @@ ALTER TABLE "File" ADD CONSTRAINT "File_classId_fkey" FOREIGN KEY ("classId") RE
 
 -- AddForeignKey
 ALTER TABLE "Assignment" ADD CONSTRAINT "Assignment_classId_fkey" FOREIGN KEY ("classId") REFERENCES "Class"("code") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentAssignmentSubmission" ADD CONSTRAINT "StudentAssignmentSubmission_assignmentId_fkey" FOREIGN KEY ("assignmentId") REFERENCES "Assignment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentAssignmentSubmission" ADD CONSTRAINT "StudentAssignmentSubmission_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Bill" ADD CONSTRAINT "Bill_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

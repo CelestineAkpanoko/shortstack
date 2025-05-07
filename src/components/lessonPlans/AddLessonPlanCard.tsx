@@ -1,3 +1,5 @@
+'use client';
+
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus } from 'lucide-react';
 

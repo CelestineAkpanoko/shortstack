@@ -1,4 +1,4 @@
-import { getGenericLessonPlans } from "@/src/actions/lessonPlanActions";
+import { getGenericLessonPlans } from "@/src/app/actions/lessonPlansActions";
 import LessonPlanCard from "@/src/components/lessonPlans/LessonPlanCard";
 import AddLessonPlanDialog from "@/src/components/lessonPlans/AddLessonPlanDialog";
 import AddAnything from "@/src/components/AddAnything";

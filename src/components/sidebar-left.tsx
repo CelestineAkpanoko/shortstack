@@ -28,13 +28,13 @@ import {
 } from "@/src/components/ui/sidebar"
 
 import mascot from '../../public/assets/img/Mascout 9ldpi.png'
-import simple_logo from '../../public/assets/img/logo simple - greenldpi.png'
+import simple_logo from '../../public/assets/img/logo-simple-greenldpi.png'
 
 const data = {
   dashLogo: [{
          
     title: simple_logo,
-    url: "/dashboard",
+    url: "/teacher/dashboard",
     icon: mascot,
   }
   ],
