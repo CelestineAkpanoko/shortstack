@@ -21,7 +21,7 @@ import {
 
 // Import images
 import mascot from "@/public/assets/img/Mascout 9ldpi.png";
-import simpleLogo from "@/public/assets/img/logo simple - greenldpi.png";
+import simpleLogo from '@/public/assets/img/logo-simple-greenldpi.png'
 
 export function DashboardSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);

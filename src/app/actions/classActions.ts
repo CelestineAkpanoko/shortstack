@@ -1,11 +1,17 @@
 'use server';
 
 import { db } from "@/src/lib/db";
-import { revalidatePath } from "next/cache";
 import { getAuthSession } from "@/src/lib/auth";
-import { Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { Prisma } from '@prisma/client';
 
 // Types
+interface ClassSchedule {
+  days: string[]; // e.g., ["monday", "wednesday"]
+  startTime: string; // e.g., "09:00"
+  endTime: string; // e.g., "11:00"
+}
+
 interface ClassData {
   name: string;
   emoji: string;
@@ -13,6 +19,8 @@ interface ClassData {
   day?: string;
   time?: string;
   grade?: string;
+  color?: string;
+  schedule?: ClassSchedule;
 }
 
 interface ClassResponse {
@@ -21,7 +29,8 @@ interface ClassResponse {
   error?: string;
 }
 
-const generateUniqueClassCode = async (userId: string): Promise<string> => {
+// Helper function to generate a unique class code
+async function generateUniqueClassCode(userId: string): Promise<string> {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const codeLength = 6;
 
@@ -46,7 +55,75 @@ const generateUniqueClassCode = async (userId: string): Promise<string> => {
       return code;
     }
   }
-};
+}
+
+// Create recurring calendar events for class sessions
+async function createClassScheduleEvents(classData: any, schedules: any[]) {
+  try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      console.log("No session for calendar event creation");
+      return;
+    }
+    
+    // Create calendar events for each schedule
+    for (const schedule of schedules) {
+      // Get the days for this schedule
+      const days = schedule.days || [];
+      
+      if (days.length === 0) {
+        console.log("No days specified for this schedule");
+        continue;
+      }
+      
+      // Create a single recurring event with all selected days
+      const eventTitle = `${classData.emoji} ${classData.name} Class`;
+      
+      // Convert start/end times to proper date objects
+      const startHour = parseInt(schedule.startTime.split(':')[0]);
+      const startMinute = parseInt(schedule.startTime.split(':')[1]);
+      const endHour = parseInt(schedule.endTime.split(':')[0]);
+      const endMinute = parseInt(schedule.endTime.split(':')[1]);
+      
+      const startDate = new Date();
+      startDate.setHours(startHour, startMinute, 0, 0);
+      
+      const endDate = new Date();
+      endDate.setHours(endHour, endMinute, 0, 0);
+      
+      // Create one calendar event with all recurring days
+      const calendarEvent = await db.calendarEvent.create({
+        data: {
+          title: eventTitle,
+          description: `Regular class session for ${classData.name}`,
+          startDate: startDate,
+          endDate: endDate,
+          variant: classData.color || "primary",
+          isRecurring: true,
+          recurringDays: days, // Use the array directly
+          createdById: session.user.id,
+          classId: classData.id,
+        }
+      });
+      
+      // Create class session records
+      for (const day of days) {
+        await db.classSession.create({
+          data: {
+            dayOfWeek: day,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            classId: classData.id
+          }
+        });
+      }
+      
+      console.log(`Created recurring calendar event for class ${classData.name} with days: ${days.join(', ')}`);
+    }
+  } catch (error) {
+    console.error("Error creating class schedule events:", error);
+  }
+}
 
 // Create class
 export async function createClass(formData: FormData): Promise<ClassResponse> {
@@ -64,15 +141,34 @@ export async function createClass(formData: FormData): Promise<ClassResponse> {
 
     const userId = session.user.id;
     
-    // Get form data
+    // Get form data with validation
     const name = formData.get('name') as string;
     const emoji = formData.get('emoji') as string;
     const cadence = formData.get('cadence') as string || "Weekly";
-    const day = formData.get('day') as string || "monday";
-    const time = formData.get('time') as string || "09:00";
     const grade = formData.get('grade') as string || "9th";
     
-    console.log("Form data:", { name, emoji, cadence, day, time, grade });
+    // Validate color choice
+    const rawColor = formData.get('color') as string || "primary";
+    const validColors = ["primary", "secondary", "destructive", "success", "warning", "default"];
+    const color = validColors.includes(rawColor) ? rawColor : "primary";
+    
+    // Get schedules from JSON
+    const schedulesJson = formData.get('schedules') as string;
+    const schedules = schedulesJson ? JSON.parse(schedulesJson) : [];
+    
+    // For backward compatibility
+    // Use the first schedule's first day and time if available
+    let day = "monday";
+    let time = "09:00";
+    
+    if (schedules.length > 0 && schedules[0].days.length > 0) {
+      // Convert numeric day to string (0 = Sunday, 1 = Monday, etc.)
+      const dayMap = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      day = dayMap[schedules[0].days[0]];
+      time = schedules[0].startTime;
+    }
+    
+    console.log("Form data:", { name, emoji, cadence, grade, color, day, time, schedules });
     
     // Verify all required fields are present
     if (!name || !emoji) {
@@ -89,8 +185,7 @@ export async function createClass(formData: FormData): Promise<ClassResponse> {
         emoji,
         code,
         cadence,
-        day,
-        time,
+        color, // Use validated color
         grade,
         userId
       }
@@ -98,9 +193,15 @@ export async function createClass(formData: FormData): Promise<ClassResponse> {
 
     console.log("Class created successfully:", newClass);
 
+    // Create class sessions and calendar events
+    if (schedules && schedules.length > 0) {
+      await createClassScheduleEvents(newClass, schedules);
+    }
+
     // Update revalidation paths
     revalidatePath('/teacher/dashboard/classes', 'page');
     revalidatePath('/teacher/dashboard', 'page');
+
     return { success: true, data: newClass };
   } catch (error: any) {
     console.error("Create class error - DETAILED:", error);
@@ -220,36 +321,65 @@ export async function updateClass(id: string, data: ClassData): Promise<ClassRes
       return { success: false, error: "Unauthorized" };
     }
 
-    // Verify teacher owns the class
-    const classToUpdate = await db.class.findUnique({
+    const existingClass = await db.class.findUnique({
       where: { id },
-      select: { userId: true, code: true }
+      select: { userId: true }
     });
 
-    if (!classToUpdate || classToUpdate.userId !== session.user.id) {
-      return { success: false, error: "Class not found or access denied" };
+    if (!existingClass || existingClass.userId !== session.user.id) {
+      return { success: false, error: "Class not found or you don't have permission to update it" };
     }
 
-    const validUpdateData: any = {};
-    
-    if (data.name) validUpdateData.name = data.name;
-    if (data.emoji) validUpdateData.emoji = data.emoji;
-    if (data.cadence) validUpdateData.cadence = data.cadence;
-    if (data.day) validUpdateData.day = data.day;
-    if (data.time) validUpdateData.time = data.time;
-    if (data.grade) validUpdateData.grade = data.grade;
+    // Ensure color is validated before updating
+    const validColor = ["primary", "secondary", "destructive", "success", "warning", "default"].includes(data.color || "") 
+      ? data.color 
+      : "primary";
 
+    // Update class with clean data
     const updatedClass = await db.class.update({
       where: { id },
-      data: validUpdateData,
+      data: {
+        name: data.name,
+        emoji: data.emoji,
+        cadence: data.cadence,
+        grade: data.grade,
+        color: validColor // Use validated color
+      }
     });
 
-    revalidatePath(`/teacher/dashboard/classes/${classToUpdate.code}`);
-    revalidatePath("/teacher/dashboard/classes");
+    // If schedule is provided, update class sessions
+    if (data.schedule) {
+      // First delete existing sessions
+      await db.classSession.deleteMany({
+        where: { classId: id }
+      });
+
+      // Parse days properly - convert to numbers
+      const dayNumbers = data.schedule.days.map(day => 
+        typeof day === "string" ? parseInt(day, 10) : day
+      );
+
+      // Create new sessions for each day
+      for (const day of dayNumbers) {
+        await db.classSession.create({
+          data: {
+            classId: id,
+            dayOfWeek: day,
+            startTime: data.schedule.startTime,
+            endTime: data.schedule.endTime
+          }
+        });
+      }
+    }
+
+    // Ensure revalidation is immediate and covers all necessary paths
+    revalidatePath('/teacher/dashboard/classes', 'layout');
+    revalidatePath('/teacher/dashboard', 'layout');
+    
     return { success: true, data: updatedClass };
   } catch (error: any) {
     console.error("Update class error:", error);
-    return { success: false, error: "Failed to update class" };
+    return { success: false, error: `Failed to update class: ${error.message}` };
   }
 }
 
@@ -271,6 +401,12 @@ export async function deleteClass(id: string): Promise<ClassResponse> {
       return { success: false, error: "Class not found or access denied" };
     }
 
+    // Delete associated calendar events first
+    await db.calendarEvent.deleteMany({
+      where: { classId: id }
+    });
+
+    // Then delete the class
     await db.class.delete({
       where: { id }
     });

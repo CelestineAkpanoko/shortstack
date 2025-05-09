@@ -32,7 +32,7 @@ declare module "next-auth" {
     id: string;
     firstName?: string;
     lastName?: string;
-    role: "TEACHER" | "STUDENT";
+    role: "TEACHER" | "STUDENT" | "SUPER";
   }
 }
 

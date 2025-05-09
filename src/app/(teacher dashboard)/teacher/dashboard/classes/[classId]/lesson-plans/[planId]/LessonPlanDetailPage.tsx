@@ -12,10 +12,10 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/src/components/ui/accordion';
-import UploadFileDialog from '@/src/components/lesson_plans/UploadFileDialog';
-import FileTable from '@/src/components/lesson_plans/FileTable';
-import UploadAssignmentDialog from '@/src/components/lesson_plans/UploadAssignmentDialog';
-import AssignmentTable from '@/src/components/lesson_plans/AssignmentTable';
+import UploadFileDialog from '@/src/components/lessonPlans/UploadFileDialog';
+import FileTable from '@/src/components/lessonPlans/FileTable';
+import UploadAssignmentDialog from '@/src/components/lessonPlans/UploadAssignmentDialog';
+import AssignmentTable from '@/src/components/lessonPlans/AssignmentTable';
 import RichEditor from '@/src/components/RichEditor';
 
 

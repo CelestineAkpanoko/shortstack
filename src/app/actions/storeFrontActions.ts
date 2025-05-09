@@ -297,3 +297,41 @@ export async function copyStoreItemToClasses({
     return { success: false, error: "Failed to assign store item to classes" };
   }
 }
+
+// Delete Store Item (only teacher who owns the class can delete)
+export async function deleteStoreItem(storeItemId: string): Promise<StoreItemResponse> {
+  try {
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verificar que el item pertenece a una clase de este profesor
+    const storeItem = await db.storeItem.findFirst({
+      where: {
+        id: storeItemId,
+        class: {
+          some: {
+            userId: session.user.id
+          }
+        }
+      }
+    });
+
+    if (!storeItem) {
+      return { success: false, error: "Store item not found or you don't have permission to delete it" };
+    }
+
+    // Eliminar el item si pertenece a una clase del profesor
+    await db.storeItem.delete({
+      where: { id: storeItemId },
+    });
+
+    revalidatePath("/dashboard/storefront");
+    revalidatePath("/dashboard/classes");
+    return { success: true, message: "Store item deleted successfully" };
+  } catch (error) {
+    console.error("Error deleting store item:", error);
+    return { success: false, error: "Failed to delete store item" };
+  }
+}

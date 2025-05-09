@@ -5,21 +5,55 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/src/components/ui/dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { deleteLessonPlan } from '@/src/app/actions/lessonPlansActions';
+import { MoreHorizontal, Pencil, Trash2, Copy } from 'lucide-react';
+import { deleteLessonPlan, deleteGenericLessonPlan } from '@/src/app/actions/lessonPlansActions';
 import { toast } from 'sonner';
 import EditLessonPlanDialog from './EditLessonPlanDialog';
+import { Badge } from '@/src/components/ui/badge';
 
 interface LessonPlanCardProps {
-  plan: any;
-  classCode: string;
-  onUpdate?: () => void; // Add this prop to handle updates
+  plan: {
+    id: string;
+    name: string;
+    description?: string;
+    createdAt: string;
+    updatedAt: string;
+    classId?: string; // Class code if this is a regular lesson plan
+  };
+  backgroundColor: string;
+  isTemplate?: boolean;
+  isSuperUser?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onUpdate?: () => void; // Add this missing prop
+  viewContext?: 'class' | 'dashboard'; // Add this prop
 }
 
-export default function LessonPlanCard({ plan, classCode, onUpdate }: LessonPlanCardProps) {
+export default function LessonPlanCard({ 
+  plan, 
+  backgroundColor,
+  isTemplate = false,
+  isSuperUser = false,
+  onEdit,
+  onDelete,
+  onUpdate,
+  viewContext = 'dashboard', // Default to 'dashboard' if not provided
+}: LessonPlanCardProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  // Determine the link URL based on whether this is a template or regular plan
+  const getLinkUrl = () => {
+    if (viewContext === 'class' && plan.classId) {
+      // When viewed from class context, use class-specific route
+      return `/teacher/dashboard/classes/${plan.classId}/lesson-plans/${plan.id}`;
+    } else {
+      // Whether it's a template or regular plan, use the same detail view route
+      // The LessonPlanDetailView will display it correctly based on the template status
+      return `/teacher/dashboard/lesson-plans/${plan.id}`;
+    }
+  };
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Prevent navigation if clicking on dropdown
@@ -32,12 +66,22 @@ export default function LessonPlanCard({ plan, classCode, onUpdate }: LessonPlan
   };
 
   const handleDelete = async () => {
-    // Use toast.promise for better UX
+    // If parent component provided onDelete, use that instead
+    if (onDelete) {
+      onDelete();
+      return;
+    }
+    
+    // Otherwise use built-in delete functionality
     toast.promise(
       async () => {
         setIsDeleting(true);
         try {
-          const response = await deleteLessonPlan(plan.id);
+          // Delete the appropriate type of lesson plan
+          const response = isTemplate
+            ? await deleteGenericLessonPlan(plan.id)
+            : await deleteLessonPlan(plan.id);
+            
           if (!response.success) {
             throw new Error(response.error || 'Failed to delete lesson plan');
           }
@@ -54,14 +98,21 @@ export default function LessonPlanCard({ plan, classCode, onUpdate }: LessonPlan
         }
       },
       {
-        loading: 'Deleting lesson plan...',
-        success: 'Lesson plan deleted successfully',
-        error: (err) => `${err.message || 'Failed to delete lesson plan'}`
+        loading: `Deleting ${isTemplate ? 'template' : 'lesson plan'}...`,
+        success: `${isTemplate ? 'Template' : 'Lesson plan'} deleted successfully`,
+        error: (err) => `${err.message || 'Failed to delete'}`
       }
     );
   };
 
   const handleEdit = () => {
+    // If parent component provided onEdit, use that instead
+    if (onEdit) {
+      onEdit();
+      return;
+    }
+    
+    // Otherwise use built-in edit functionality
     setIsEditDialogOpen(true);
   };
 
@@ -74,40 +125,74 @@ export default function LessonPlanCard({ plan, classCode, onUpdate }: LessonPlan
 
   return (
     <>
-      <Link href={`/teacher/dashboard/classes/${classCode}/lesson-plans/${plan.id}`} onClick={handleCardClick}>
-        <Card className="bg-orange-400 w-[250px] h-[250px] rounded-xl relative cursor-pointer hover:shadow-lg transition-shadow">
-          {/* Dropdown menu in the top-right corner */}
-          <div className="absolute top-2 right-2 z-10 dropdown-menu" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="bg-white/20 backdrop-blur-sm rounded-full p-1 hover:bg-white/40 transition-colors">
-                <MoreHorizontal className="h-5 w-5 text-white" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleEdit} disabled={isDeleting}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDelete} disabled={isDeleting} className="text-red-600">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      <Link href={getLinkUrl()} onClick={handleCardClick}>
+        <Card 
+          className={`${backgroundColor} w-[250px] h-[250px] rounded-xl relative cursor-pointer hover:shadow-lg transition-shadow`}
+        >
+          {/* Template badge if applicable */}
+          {isTemplate && (
+            <Badge 
+              variant="secondary" 
+              className="absolute top-2 left-2 bg-white/30 backdrop-blur-sm text-white"
+            >
+              Template
+            </Badge>
+          )}
+          
+          {/* Only show dropdown if not a template or if super user */}
+          {(!isTemplate || isSuperUser) && (
+            <div className="absolute top-2 right-2 z-10 dropdown-menu" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="bg-white/20  rounded-full p-1 hover:bg-white/40 transition-colors">
+                  <MoreHorizontal className="h-5 w-5 text-white" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleEdit} disabled={isDeleting}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Lesson Plan
+                  </DropdownMenuItem>
+                  
+                  {/* Special template actions for non-super users */}
+                  {isTemplate && !isSuperUser && (
+                    <DropdownMenuItem onClick={() => router.push(`/teacher/dashboard/lesson-plans/use-template/${plan.id}`)}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Use Template
+                    </DropdownMenuItem>
+                  )}
+                  
+                  {/* Only super users can delete templates */}
+                  {(!isTemplate || isSuperUser) && (
+                    <DropdownMenuItem onClick={handleDelete} disabled={isDeleting} className="text-red-600">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
 
-          <CardContent className="flex items-center justify-center h-full">
-            <h1 className="text-2xl font-bold text-white">{plan.name}</h1>
+          <CardContent className="flex flex-col items-center justify-center h-full">
+            <h1 className="text-2xl font-bold text-white text-center">{plan.name}</h1>
+            {plan.description && (
+              <p className="text-white/80 text-sm mt-2 text-center line-clamp-3">
+                {plan.description}
+              </p>
+            )}
           </CardContent>
         </Card>
       </Link>
 
-      {/* Edit Dialog */}
-      <EditLessonPlanDialog
-        isOpen={isEditDialogOpen}
-        onClose={() => setIsEditDialogOpen(false)}
-        onSuccess={handleEditSuccess}
-        lessonPlan={plan}
-      />
+      {/* Edit Dialog - only shown for non-template plans or if super user */}
+      {(!isTemplate || isSuperUser) && (
+        <EditLessonPlanDialog
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSuccess={handleEditSuccess}
+          lessonPlan={plan}
+          isTemplate={isTemplate}
+        />
+      )}
     </>
   );
 }

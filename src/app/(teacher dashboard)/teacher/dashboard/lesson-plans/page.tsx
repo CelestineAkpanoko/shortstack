@@ -1,74 +1,320 @@
-import { getGenericLessonPlans } from "@/src/app/actions/lessonPlansActions";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/src/components/ui/tabs";
+import { Button } from "@/src/components/ui/button";
+import { PlusCircle } from "lucide-react";
+import {
+  getGenericLessonPlans,
+  getLessonPlans,
+  deleteLessonPlan,
+  createGenericLessonPlan,
+  updateGenericLessonPlan,
+  deleteGenericLessonPlan,
+} from "@/src/app/actions/lessonPlansActions";
 import LessonPlanCard from "@/src/components/lessonPlans/LessonPlanCard";
 import AddLessonPlanDialog from "@/src/components/lessonPlans/AddLessonPlanDialog";
-import AddAnything from "@/src/components/AddAnything";
-import { Suspense } from "react";
-
+import AddGenericLessonPlanCard from "@/src/components/lessonPlans/AddGenericLessonPlanCard";
+import GenericLessonPlanDialog from "@/src/components/lessonPlans/GenericLessonPlanDialog";
+import { toast } from "sonner";
 
 // LessonPlan interface
 interface LessonPlan {
   id: string;
-  description: string;
+  name: string;
+  description?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-// LessonPlans content component to handle data fetching
-async function LessonPlansContent() {
-  const response = await getGenericLessonPlans();
+export default function LessonPlansPage() {
+  const { data: session, status } = useSession();
+  
+  // Set default tab based on user role - templates for super users, my-plans for regular teachers
+  const isSuperUser = session?.user?.role === "SUPER";
+  const [activeTab, setActiveTab] = useState<"my-plans" | "templates">(
+    isSuperUser ? "templates" : "my-plans"
+  );
+  const [userPlans, setUserPlans] = useState<LessonPlan[]>([]);
+  const [genericPlans, setGenericPlans] = useState<LessonPlan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isGenericDialogOpen, setIsGenericDialogOpen] = useState(false);
+  const [selectedGenericPlan, setSelectedGenericPlan] =
+    useState<LessonPlan | null>(null);
 
-  if (!response.success || !response.data) {
-    return <div className="text-center py-8 opacity-0">No lesson plans found</div>;
-  }
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        // Only fetch user-created lesson plans if not a super user
+        if (session?.user?.id && !isSuperUser) {
+          const userResponse = await getLessonPlans(session.user.id);
+          if (userResponse.success) {
+            setUserPlans(userResponse.data || []);
+          }
+        }
 
-  // Sort the lesson plans by creation date
-  const sortedLessonPlans = [...response.data].sort((a, b) => {
-    const dateA = new Date(a.createdAt).getTime();
-    const dateB = new Date(b.createdAt).getTime();
-    return dateB - dateA; // Newest first
-  });
+        // Always fetch generic lesson plans
+        const genericResponse = await getGenericLessonPlans();
+        if (genericResponse.success) {
+          setGenericPlans(genericResponse.data || []);
+        }
+      } catch (error) {
+        console.error("Error fetching lesson plans:", error);
+        toast.error("Failed to load lesson plans");
+      } finally {
+        setIsLoading(false);
+      }
+    }
 
-  const getColumnColor = (index: number) => {
-    switch (index % 3) {
-      case 0: return "bg-purple-100";
-      case 1: return "bg-pink-100";
-      case 2: return "bg-indigo-100";
-      default: return "bg-purple-100";
+    if (status === "authenticated") {
+      fetchData();
+    }
+  }, [session, status, isSuperUser]);
+
+  const handleCreateGenericPlan = async (data: {
+    name: string;
+    description?: string;
+  }) => {
+    try {
+      const response = await createGenericLessonPlan(data);
+      if (response.success) {
+        toast.success("Template created successfully");
+        // Add to the end of the array instead of the beginning
+        setGenericPlans([...genericPlans, response.data]);
+        setIsGenericDialogOpen(false);
+      } else {
+        toast.error(response.error || "Failed to create template");
+      }
+    } catch (error) {
+      console.error("Error creating generic lesson plan:", error);
+      toast.error("An unexpected error occurred");
     }
   };
 
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-      {sortedLessonPlans.map((lessonPlan, index) => (
-        <LessonPlanCard
-          key={lessonPlan.id}
-          id={lessonPlan.id}
-          name={lessonPlan.name}
-          description={lessonPlan.description}
-          createdAt={lessonPlan.createdAt}
-          updatedAt={lessonPlan.updatedAt}
-          backgroundColor={getColumnColor(index)}
-        />
-      ))}
+  const handleUpdateGenericPlan = async (
+    id: string,
+    data: { name: string; description?: string }
+  ) => {
+    try {
+      const response = await updateGenericLessonPlan(id, data);
+      if (response.success) {
+        toast.success("Template updated successfully");
+        setGenericPlans(
+          genericPlans.map((plan) =>
+            plan.id === id ? { ...plan, ...data } : plan
+          )
+        );
+        setSelectedGenericPlan(null);
+      } else {
+        toast.error(response.error || "Failed to update template");
+      }
+    } catch (error) {
+      console.error("Error updating generic lesson plan:", error);
+      toast.error("An unexpected error occurred");
+    }
+  };
 
-      {/* Add the AddAnything component here */}
-      <AddAnything 
-        title="Create a Lesson Plan" 
-        FormComponent={AddLessonPlanDialog} 
-      />
-    </div>
-  );
-}
+  const handleDeleteGenericPlan = async (id: string) => {
+    try {
+      const response = await deleteGenericLessonPlan(id);
+      if (response.success) {
+        toast.success("Template deleted successfully");
+        setGenericPlans(genericPlans.filter((plan) => plan.id !== id));
+      } else {
+        toast.error(response.error || "Failed to delete template");
+      }
+    } catch (error) {
+      console.error("Error deleting generic lesson plan:", error);
+      toast.error("An unexpected error occurred");
+    }
+  };
 
-// Main page component
-export default function LessonPlansPage() {
+  // Add this function alongside your other handler functions
+  const handleDeleteUserPlan = async (id: string) => {
+    try {
+      const response = await deleteLessonPlan(id);
+      if (response.success) {
+        toast.success("Lesson plan deleted successfully");
+        // Update local state to remove the deleted plan
+        setUserPlans(userPlans.filter((plan) => plan.id !== id));
+      } else {
+        toast.error(response.error || "Failed to delete lesson plan");
+      }
+    } catch (error) {
+      console.error("Error deleting lesson plan:", error);
+      toast.error("An unexpected error occurred");
+    }
+  };
+
+  const getColumnColor = (index: number) => {
+    switch (index % 3) {
+      case 0:
+        return "bg-orange-300";
+      case 1:
+        return "bg-green-300";
+      case 2:
+        return "bg-red-300";
+      default:
+        return "bg-orange-300";
+    }
+  };
+
+  if (status === "loading" || isLoading) {
+    return <div className="text-center py-8">Loading lesson plans...</div>;
+  }
+
   return (
     <main className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-8">Lesson Plans</h1>
-      
-      <Suspense fallback={<div className="text-center py-8">Loading lesson plans...</div>}>
-        <LessonPlansContent />
-      </Suspense>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">
+          {isSuperUser ? "Lesson Plan Templates" : "Lesson Plans"}
+        </h1>
+      </div>
+
+      {isSuperUser ? (
+        // For super users, just show the templates content directly (no tabs)
+        <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {/* Render generic lesson plan cards */}
+            {genericPlans.map((plan, index) => (
+              <LessonPlanCard
+                key={plan.id}
+                plan={plan}
+                backgroundColor={getColumnColor(index)}
+                isTemplate={true}
+                isSuperUser={true}
+                onEdit={() => setSelectedGenericPlan(plan)}
+                onDelete={() => handleDeleteGenericPlan(plan.id)}
+              />
+            ))}
+
+            {/* Add Template card */}
+            <AddGenericLessonPlanCard
+              onClick={() => setIsGenericDialogOpen(true)}
+            />
+
+            {/* Show message if no templates exist yet */}
+            {genericPlans.length === 0 && (
+              <div className="col-span-full text-center py-8 text-gray-500">
+                No templates available. Create your first template using the card on the left.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        // For regular teachers, show the tabs UI
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) =>
+            setActiveTab(value as "my-plans" | "templates")
+          }
+        >
+          <TabsList className="mb-6">
+            <TabsTrigger value="my-plans">My Lesson Plans</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="my-plans">
+            {/* Regular teachers' lesson plans content */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {userPlans.length > 0 ? (
+                userPlans.map((plan, index) => (
+                  <LessonPlanCard
+                    key={plan.id}
+                    plan={plan}
+                    backgroundColor={getColumnColor(index)}
+                    isTemplate={false}
+                    // Add these handlers
+                    onDelete={() => handleDeleteUserPlan(plan.id)}
+                    onUpdate={() => {
+                      // Refresh user plans after deletion
+                      if (session?.user?.id) {
+                        getLessonPlans(session.user.id).then((response) => {
+                          if (response.success) setUserPlans(response.data || []);
+                        });
+                      }
+                    }}
+                  />
+                ))
+              ) : (
+                <div className="col-span-full text-center py-8 text-gray-500">
+                  You haven't created any lesson plans yet.
+                </div>
+              )}
+
+              <div
+                className="border-4 border-dashed border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-gray-300 transition-colors"
+                onClick={() => setIsAddDialogOpen(true)}
+              >
+                <PlusCircle className="h-12 w-12 text-gray-400 mb-2" />
+                <p className="text-gray-500">Create New Lesson Plan</p>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="templates">
+            {/* Templates content for regular teachers */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {genericPlans.map((plan, index) => (
+                <LessonPlanCard
+                  key={plan.id}
+                  plan={plan}
+                  backgroundColor={getColumnColor(index)}
+                  isTemplate={true}
+                  isSuperUser={false}
+                />
+              ))}
+
+              {genericPlans.length === 0 && (
+                <div className="col-span-full text-center py-8 text-gray-500">
+                  No templates available.
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
+
+      {/* Dialog for creating/editing regular lesson plans - only visible to regular teachers */}
+      {!isSuperUser && (
+        <AddLessonPlanDialog
+          isOpen={isAddDialogOpen}
+          onClose={() => setIsAddDialogOpen(false)}
+          onSuccess={() => {
+            // Refresh data after creating a lesson plan
+            if (session?.user?.id) {
+              getLessonPlans(session.user.id).then((response) => {
+                if (response.success) setUserPlans(response.data || []);
+              });
+            }
+          }}
+        />
+      )}
+
+      {/* Dialog for creating/editing generic lesson plans (templates) - only visible to super users */}
+      {isSuperUser && (
+        <GenericLessonPlanDialog
+          isOpen={isGenericDialogOpen || !!selectedGenericPlan}
+          onClose={() => {
+            setIsGenericDialogOpen(false);
+            setSelectedGenericPlan(null);
+          }}
+          onSubmit={
+            selectedGenericPlan
+              ? (data) => handleUpdateGenericPlan(selectedGenericPlan.id, data)
+              : handleCreateGenericPlan
+          }
+          initialData={selectedGenericPlan || undefined}
+        />
+      )}
     </main>
   );
 }
