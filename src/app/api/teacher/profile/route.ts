@@ -33,8 +33,8 @@ export async function GET(req: Request) {
       image: user.image,
       teacherProfile: user.teacherProfile,
       // Include any teacher specific fields here
-      institution: user.teacherProfile?.institution,
-      bio: user.teacherProfile?.bio,
+      institution: (user.teacherProfile as any)?.institution,
+      bio: (user.teacherProfile as any)?.bio,
     });
   } catch (error) {
     console.error("Error fetching teacher profile:", error);

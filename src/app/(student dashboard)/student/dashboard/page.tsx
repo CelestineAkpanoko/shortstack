@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useToast } from '@/src/hooks/use-toast';
 import StudentDashboardClient from './StudentDashboardClient';
 import { getStudentClasses } from '@/src/app/actions/studentActions';
+import { getStudentOverallProgress } from "@/src/app/actions/gradebookActions";
 
 interface ClassSession {
   id: string;
@@ -34,7 +35,13 @@ interface Student {
   lastName: string;
   schoolEmail: string;
   profileImage?: string | null;
-  progress?: any;
+  progress?: {
+    completedAssignments: number;
+    totalAssignments: number;
+    points: number;
+    balance: number;
+    streak: number;
+  } | null;
   teacher?: {
     id: string;
     name: string;
@@ -43,7 +50,6 @@ interface Student {
   } | null;
 }
 
-// Define days of week array for formatting
 const DaysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function StudentDashboard() {
@@ -54,7 +60,6 @@ export default function StudentDashboard() {
   const { data: session, status } = useSession();
   const { toast } = useToast();
 
-  // Format class sessions into readable schedule strings
   const formatClassSchedule = (sessions?: ClassSession[]) => {
     if (!sessions || sessions.length === 0) return null;
     
@@ -65,67 +70,91 @@ export default function StudentDashboard() {
   };
 
   useEffect(() => {
-    // Fetch student info and enrolled classes
     const fetchStudentData = async () => {
       try {
         setLoading(true);
-        console.log("Fetching student data with session:", session?.user?.id);
         
-        // First fetch profile data
-        let profileResponse;
+        if (!session?.user) {
+          return;
+        }
+
+        // Create student data from session
+        const baseStudentData: Student = {
+          id: session.user.id,
+          firstName: session.user.firstName || 'Student',
+          lastName: session.user.lastName || 'User',
+          schoolEmail: session.user.email || '',
+          profileImage: session.user.image,
+          progress: null
+        };
+        
+        setStudent(baseStudentData);
+        
+        // Try to enhance with profile data
         try {
-          profileResponse = await fetch('/api/student/profile', {
+          const profileResponse = await fetch('/api/student/profile', {
             credentials: 'include',
-            headers: {
-              'Cache-Control': 'no-cache'
-            }
+            headers: { 'Cache-Control': 'no-cache' }
           });
           
-          if (!profileResponse.ok) {
-            console.error(`Profile API error: ${profileResponse.status} ${profileResponse.statusText}`);
-            if (profileResponse.status === 401) {
-              router.push('/student');
-              return;
-            }
-          } else {
+          if (profileResponse.ok) {
             const profileData = await profileResponse.json();
-            setStudent(profileData.student);
+            if (profileData.student) {
+              const enhancedStudentData = {
+                ...baseStudentData,
+                ...profileData.student,
+                progress: null
+              };
+              setStudent(enhancedStudentData);
+            }
           }
         } catch (profileError) {
-          console.error("Error fetching profile:", profileError);
-          // Continue even if profile fetch fails
+          // Continue with base data if profile fetch fails
+        }
+
+        // Fetch progress data
+        try {
+          const progressResult = await getStudentOverallProgress();
+          
+          if (progressResult.success && progressResult.data?.progress) {
+            const progress = progressResult.data.progress;
+            
+            setStudent(prev => {
+              if (!prev) return null;
+              return { ...prev, progress };
+            });
+          } else {
+            toast({
+              title: "Progress not loaded",
+              description: progressResult.error || "Couldn't load your progress data",
+              variant: "destructive",
+            });
+          }
+        } catch (progressError) {
+          toast({
+            title: "Error",
+            description: "Failed to load your progress data",
+            variant: "destructive",
+          });
         }
         
-        // Now fetch classes
+        // Fetch classes
         try {
-          console.log("Fetching classes...");
           const classesResult = await getStudentClasses();
-          
-          if (!classesResult.success) {
-            console.error("Failed to load classes:", classesResult.error);
+          if (classesResult.success && classesResult.data) {
+            const processedClasses = classesResult.data.map((cls: any) => ({
+              ...cls,
+              schedule: formatClassSchedule(cls.classSessions),
+            }));
+            setClasses(processedClasses);
+          } else {
             toast({
               title: "Classes not loaded",
               description: classesResult.error || "Couldn't load your classes",
               variant: "destructive",
             });
-            return;
           }
-          
-          if (!classesResult.data || classesResult.data.length === 0) {
-            console.log("No classes found for student");
-            setClasses([]);
-            return;
-          }
-          
-          // Transform the class data to include formatted schedules
-          const processedClasses = classesResult.data.map((cls: any) => ({
-            ...cls,
-            schedule: formatClassSchedule(cls.classSessions),
-          }));
-          
-          setClasses(processedClasses);
         } catch (classesError) {
-          console.error("Error fetching classes:", classesError);
           toast({
             title: "Error",
             description: "Failed to load your classes",
@@ -133,7 +162,6 @@ export default function StudentDashboard() {
           });
         }
       } catch (error) {
-        console.error('Error fetching student data:', error);
         toast({
           title: "Error",
           description: "Failed to load your dashboard data",
@@ -155,6 +183,22 @@ export default function StudentDashboard() {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-center">
+          <p className="text-muted-foreground">Unable to load student data</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-2 text-blue-600 hover:underline"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

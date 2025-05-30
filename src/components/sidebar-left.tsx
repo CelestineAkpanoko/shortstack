@@ -18,9 +18,11 @@ import {
   SidebarTrigger,
 } from "@/src/components/ui/sidebar"
 
-export function SidebarLeft({
-  ...props
-}: React.ComponentProps<typeof Sidebar>) {
+interface SidebarLeftProps {
+  filteredNavItems?: any[]; // Add optional prop for filtered items
+}
+
+export function SidebarLeft({ filteredNavItems }: SidebarLeftProps = {}) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -34,14 +36,17 @@ export function SidebarLeft({
     }
   };
 
+  // Use filtered items if provided, otherwise use default
+  const navItems = filteredNavItems || dashboardData.navMain;
+
   return (
-    <Sidebar collapsible="icon" className="border-r-0 bg-[#f1faf3]" {...props}>
+    <Sidebar collapsible="icon" className="border-r-0 bg-[#f1faf3]">
       <SidebarHeader className="items-center mb-4">
         <NavLogo items={dashboardData.dashLogo} />
       </SidebarHeader>
       <SidebarContent className="pl-4 pt-10 mb-4 flex flex-col">
         <div className="space-y-6">
-          <NavMain items={dashboardData.navMain} />
+          <NavMain items={navItems} /> {/* Use filtered items */}
         </div>
       </SidebarContent>
       <SidebarFooter>

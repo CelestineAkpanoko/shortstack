@@ -11,8 +11,8 @@ export default async function DashboardPage() {
     redirect('/teacher');
   }
   
-  // Ensure user is a teacher
-  if (session.user.role !== "TEACHER") {
+  // Ensure user is a teacher or SUPER
+  if (session?.user?.role && !["TEACHER", "SUPER"].includes(session.user.role)) {
     redirect('/student/dashboard');
   }
   

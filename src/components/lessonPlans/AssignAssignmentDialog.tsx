@@ -1,21 +1,24 @@
+'use client';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
 import { useState, useEffect } from 'react';
-import { copyFileToLessonPlan } from '@/src/app/actions/fileActions';
+import { copyAssignmentToLessonPlan } from '@/src/app/actions/assignmentActions';
 import { getClasses } from '@/src/app/actions/classActions';
 import { getLessonPlansByClass } from '@/src/app/actions/lessonPlansActions';
 import { Loader2, Check } from 'lucide-react';
 import { Checkbox } from '@/src/components/ui/checkbox';
+import { toast } from 'sonner';
 
-interface FileRecord {
+interface AssignmentRecord {
   id: string;
   name: string;
   fileType?: string;
   activity?: string;
-  size?: number | string;
+  dueDate?: string;
+  size?: number;
   url?: string;
-  classId: string;
-  lessonPlans?: Array<{ id: string; name: string }>;
+  classId?: string;
 }
 
 interface ClassRecord {
@@ -29,14 +32,19 @@ interface LessonPlanRecord {
   name: string;
 }
 
-interface AssignFileDialogProps {
-  file: FileRecord;
+interface AssignAssignmentDialogProps {
+  assignment: AssignmentRecord;
   isOpen: boolean;
   onClose: () => void;
   onUpdate: () => void;
 }
 
-export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: AssignFileDialogProps) {
+export default function AssignAssignmentDialog({ 
+  assignment,
+  isOpen, 
+  onClose, 
+  onUpdate 
+}: AssignAssignmentDialogProps) {
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [lessonPlans, setLessonPlans] = useState<LessonPlanRecord[]>([]);
@@ -45,33 +53,39 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch classes on mount
+  // Fetch classes when dialog opens
   useEffect(() => {
-    async function fetchClasses() {
-      try {
-        const result = await getClasses();
-        if (result.success) {
-          setClasses(result.data || []);
-          // Select a default class other than the current one
-          const otherClass = result.data.find((c: { code: string }) => c.code !== file.classId);
-          if (otherClass) {
-            setSelectedClass(otherClass.code);
-          } else if (result.data.length > 0) {
-            setSelectedClass(result.data[0].code);
+    if (isOpen) {
+      const fetchClasses = async () => {
+        try {
+          setIsLoading(true);
+          const result = await getClasses();
+          if (result.success) {
+            setClasses(result.data || []);
+            // Select a default class other than the current one
+            const otherClass = result.data.find((c: { code: string }) => c.code !== assignment.classId);
+            if (otherClass) {
+              setSelectedClass(otherClass.code);
+            } else if (result.data.length > 0) {
+              setSelectedClass(result.data[0].code);
+            }
           }
+        } catch (error) {
+          console.error('Failed to fetch classes:', error);
+          toast.error('Failed to fetch classes');
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Failed to fetch classes:', error);
-      } finally {
-        setIsLoading(false);
       }
+      fetchClasses();
+      // Reset selected lesson plans when dialog opens
+      setSelectedLessonPlans([]);
     }
-    fetchClasses();
-  }, [file.classId]);
+  }, [isOpen, assignment.classId]);
 
   // Fetch lesson plans when a class is selected
   useEffect(() => {
-    async function fetchLessonPlans() {
+    const fetchLessonPlans = async () => {
       if (!selectedClass) return;
       
       setIsLoading(true);
@@ -79,9 +93,13 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
         const result = await getLessonPlansByClass(selectedClass);
         if (result.success) {
           setLessonPlans(result.data || []);
+        } else {
+          setLessonPlans([]);
+          toast.error('Failed to load lesson plans');
         }
       } catch (error) {
         console.error('Failed to fetch lesson plans:', error);
+        setLessonPlans([]);
       } finally {
         setIsLoading(false);
       }
@@ -100,10 +118,10 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
     setError(null);
 
     try {
-      // Create a copy of the file for each selected lesson plan
+      // Create a copy of the assignment for each selected lesson plan
       const promises = selectedLessonPlans.map(lessonPlanId => 
-        copyFileToLessonPlan({
-          sourceFileId: file.id,
+        copyAssignmentToLessonPlan({
+          sourceAssignmentId: assignment.id,
           targetLessonPlanId: lessonPlanId,
           targetClassId: selectedClass
         })
@@ -115,14 +133,17 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
       const failedResults = results.filter(r => !r.success);
       
       if (failedResults.length > 0) {
-        setError(`Failed to assign file to ${failedResults.length} lesson plans`);
+        setError(`Failed to assign assignment to ${failedResults.length} lesson plans`);
+        toast.error(`Failed to assign assignment to ${failedResults.length} lesson plans`);
       } else {
+        toast.success('Assignment assigned successfully to selected lesson plans');
         onUpdate();
         onClose();
       }
     } catch (error: any) {
-      console.error('Error assigning file:', error);
+      console.error('Error assigning assignment:', error);
       setError(error.message || 'An unexpected error occurred');
+      toast.error(error.message || 'An unexpected error occurred');
     } finally {
       setIsUpdating(false);
     }
@@ -142,14 +163,19 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
     <Dialog open={isOpen} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Assign File to Additional Lesson Plans</DialogTitle>
+          <DialogTitle>Assign Assignment to Additional Lesson Plans</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
             <p className="text-sm text-gray-500 mb-2">
-              A copy of this file will be assigned to the lesson plans you select below. The original file will remain unchanged.
+              A copy of this assignment will be assigned to the lesson plans you select below. The original assignment will remain unchanged.
             </p>
           </div>
+          
+          <div className="p-2 border rounded bg-gray-50">
+            <p className="font-medium">{assignment.name}</p>
+          </div>
+          
           <div>
             <label className="block text-sm font-medium mb-1">
               Select Class
@@ -166,7 +192,7 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
               <option value="" disabled>Select a class</option>
               {classes.map(c => (
                 <option key={c.code} value={c.code}>
-                  {c.name} {c.code === file.classId ? '(Current Class)' : ''}
+                  {c.name} {c.code === assignment.classId ? '(Current Class)' : ''}
                 </option>
               ))}
             </select>
@@ -174,7 +200,7 @@ export default function AssignFileDialog({ file, isOpen, onClose, onUpdate }: As
 
           <div>
             <label className="block text-sm font-medium mb-1">
-              Select Lesson Plans to Add This File To
+              Select Lesson Plans to Add This Assignment To
             </label>
             {isLoading ? (
               <div className="flex justify-center p-4">

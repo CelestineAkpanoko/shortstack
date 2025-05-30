@@ -17,6 +17,18 @@ import { NavLogo } from "@/src/components/nav-logo";
 // Get the dashboard navigation data from shared source 
 import { dashboardData } from "@/src/lib/constants/nav-data";
 
+const getFilteredNavItems = (role: string, originalItems: any[]) => {
+  if (role === "SUPER") {
+    // Only show lesson plans for SUPER users
+    return originalItems.filter(item => 
+      item.title === "Lesson Plans" || 
+      item.url?.includes("lesson-plans")
+    );
+  }
+  // Return all items for TEACHER role
+  return originalItems;
+};
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [pageTitle, setPageTitle] = useState("Dashboard");
@@ -25,6 +37,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session } = useSession({
     required: true,
   });
+  
+  // Get filtered navigation items based on user role
+  const filteredNavItems = getFilteredNavItems(
+    session?.user?.role || "TEACHER", 
+    dashboardData.navMain
+  );
   
   // Get teacher info for avatar
   const teacherName =
@@ -95,48 +113,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NavLogo items={dashboardData.dashLogo} />
           </div>
           
-          {/* Mobile teacher profile info */}
-          {/* <div className="px-4 py-4 border-b">
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-medium">
-                {teacherImage ? (
-                  <img 
-                    src={teacherImage} 
-                    alt={teacherName} 
-                    className="h-full w-full rounded-full object-cover"
-                  />
-                ) : (
-                  <span>{teacherInitial}</span>
-                )}
-              </div>
-              <div>
-                <p className="font-medium">{teacherName}</p>
-                <p className="text-sm text-gray-500">Teacher Dashboard</p>
-              </div>
-            </div>
-          </div> */}
-          
-          {/* Mobile Navigation */}
+          {/* Mobile Navigation - Use filtered items */}
           <div className="px-2 py-4 space-y-1">
-            <NavMain items={dashboardData.navMain} />
-            
-            {/* Logout Button */}
-            {/* <div className="mt-6 px-2">
-              <button
-                onClick={handleLogout}
-                className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm text-red-600 hover:bg-red-50"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </button>
-            </div> */}
+            <NavMain items={filteredNavItems} />
           </div>
         </div>
       </div>
       
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - Pass filtered items */}
       <div className="hidden md:block">
-        <SidebarLeft />
+        <SidebarLeft filteredNavItems={filteredNavItems} />
       </div>
       
       <SidebarInset className="relative flex flex-col h-screen">

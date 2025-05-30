@@ -1,3 +1,5 @@
+'use client';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
 import { createFile } from '@/src/app/actions/fileActions';
 import { Button } from '@/src/components/ui/button';

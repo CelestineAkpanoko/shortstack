@@ -12,8 +12,8 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Ensure only teachers can access teacher dashboard
-    if (session.role !== "TEACHER") {
+    // Allow both TEACHER and SUPER roles to access teacher dashboard
+    if (session.role !== "TEACHER" && session.role !== "SUPER") {
       const url = new URL("/student/dashboard", req.url);
       return NextResponse.redirect(url);
     }

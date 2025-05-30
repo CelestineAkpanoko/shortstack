@@ -7,17 +7,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/src/componen
 
 interface AddAnythingProps {
   title: string;
-  FormComponent: React.ComponentType<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; onClassJoined?: (newClass: any) => void }>;
+  FormComponent: React.ComponentType<any>; 
   onItemAdded?: (newItem: any) => void;
+  // ✅ Add props to pass through to FormComponent
+  formProps?: Record<string, any>;
 }
 
-const AddAnything: React.FC<AddAnythingProps> = ({ title, FormComponent, onItemAdded }) => {
+const AddAnything: React.FC<AddAnythingProps> = ({ 
+  title, 
+  FormComponent, 
+  onItemAdded,
+  formProps = {} // ✅ Default to empty object
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleClose = () => setIsOpen(false);
   
   const handleSuccess = () => {
     setIsOpen(false);
+    // Call the parent's refresh function if provided
+    if (onItemAdded) {
+      onItemAdded(null);
+    }
   };
 
   return (
@@ -43,11 +54,13 @@ const AddAnything: React.FC<AddAnythingProps> = ({ title, FormComponent, onItemA
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
+          {/* ✅ Pass through all required props */}
           <FormComponent
             isOpen={isOpen}
             onClose={handleClose}
             onSuccess={handleSuccess}
             onClassJoined={onItemAdded}
+            {...formProps} // ✅ Spread any additional props
           />
         </DialogContent>
       </Dialog>

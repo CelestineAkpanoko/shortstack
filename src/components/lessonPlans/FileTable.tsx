@@ -1,3 +1,5 @@
+'use client';
+
 import { Button } from '@/src/components/ui/button';
 import { 
   DropdownMenu, 

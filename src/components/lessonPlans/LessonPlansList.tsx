@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { getLessonPlansByClass } from '@/src/app/actions/lessonPlansActions';
-import  LessonPlanCard from '@/src/components/lesson_plans/LessonPlanCard';
-import AddLessonPlanCard from '@/src/components/lesson_plans/AddLessonPlanCard';
-import AddLessonPlanDialog from '@/src/components/lesson_plans/AddLessonPlanDialog';
+import  LessonPlanCard from '@/src/components/lessonPlans/LessonPlanCard';
+import AddLessonPlanCard from '@/src/components/lessonPlans/AddLessonPlanCard';
+import AddLessonPlanDialog from '@/src/components/lessonPlans/AddLessonPlanDialog';
 import Breadcrumbs from '@/src/components/Breadcrumbs';
 
 interface LessonPlansListProps {
   classCode: string;
   cName: string;
+}
+
+interface AddLessonPlanDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => Promise<void>;
+  classCode: string;
 }
 
 export default function LessonPlansList({ classCode, cName }: LessonPlansListProps) {
@@ -47,11 +54,10 @@ export default function LessonPlansList({ classCode, cName }: LessonPlansListPro
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {lessonPlans.map((plan) => (
             <LessonPlanCard 
-              key={plan.id} 
-              plan={plan} 
-              classCode={classCode}
+              key={plan.id}
+              plan={plan}
               onUpdate={fetchLessonPlans} // Pass the fetch function to update when changes happen
-            />
+              backgroundColor={''}            />
           ))}
           <AddLessonPlanCard onClick={() => setIsDialogOpen(true)} />
         </div>

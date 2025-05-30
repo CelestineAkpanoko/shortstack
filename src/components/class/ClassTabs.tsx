@@ -1,10 +1,16 @@
-'use client';
+"use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
-import { StudentList } from '../students/StudentList';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/src/components/ui/tabs";
+import { StudentList } from "../students/StudentList";
 // import { LessonPlans} from '@/src/components/class/LessonPlans';
-import LessonPlansList  from '@/src/components/lesson_plans/LessonPlansList';
-import ClassOverview from './ClassOverview';
+import LessonPlansList from "../lessonPlans/LessonPlansList";
+import ClassOverview from "./ClassOverview";
+import Gradebook from "../gradebook/Gradebook";
 
 interface ClassTabsProps {
   classData: {
@@ -26,18 +32,20 @@ export default function ClassTabs({ classData }: ClassTabsProps) {
       </TabsList>
 
       <TabsContent value="overview">
-        <ClassOverview classData={{ ...classData, overview: classData.overview ?? undefined }} />
+        <ClassOverview
+          classData={{
+            ...classData,
+            overview: classData.overview ?? undefined,
+          }}
+        />
       </TabsContent>
-
 
       <TabsContent value="lessonPlans">
         <LessonPlansList classCode={classData.code} cName={classData.name} />
       </TabsContent>
 
       <TabsContent value="gradebook">
-        <div className="flex items-center justify-center h-32 bg-muted/50 rounded-md">
-          Gradebook feature coming soon
-        </div>
+        <Gradebook classCode={classData.code} />
       </TabsContent>
     </Tabs>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from 'react';
 import { 
   Card, 
   CardContent 
@@ -10,15 +9,16 @@ import Link from 'next/link';
 import { PlusCircle } from "lucide-react";
 import { Button } from '@/src/components/ui/button';
 import { SessionDebugger } from '@/src/components/debug/SessionDebug';
+import { formatCurrency } from "@/src/lib/utils";
 
 // Define the color options for class cards
 const CLASS_COLORS = ["primary", "secondary", "success", "warning", "destructive", "default"];
 
 interface ClassSession {
   id: string;
-  dayOfWeek: number;  // 0 = Sunday, 1 = Monday, etc.
-  startTime: string;  // Format: HH:MM (24hr)
-  endTime: string;    // Format: HH:MM (24hr)
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
 }
 
 interface Class {
@@ -28,7 +28,7 @@ interface Class {
   emoji: string;
   grade?: string;
   color?: string;
-  schedule?: string; // Pre-formatted schedule string
+  schedule?: string;
   classSessions?: ClassSession[];
   _count?: {
     enrollments: number;
@@ -53,7 +53,13 @@ interface Student {
   lastName: string;
   schoolEmail: string;
   profileImage?: string | null;
-  progress?: any;
+  progress?: {
+    completedAssignments: number;
+    totalAssignments: number;
+    points: number;
+    balance: number;
+    streak: number;
+  } | null;
   teacher?: {
     id: string;
     name: string;
@@ -99,15 +105,6 @@ export default function StudentDashboardClient({ student, classes }: StudentDash
   return (
     <div className="w-full">
       <section className="mb-8">
-        {/* <div className="flex justify-between right-4 items-center mb-4">
-          <h2 className="text-xl md:text-2xl font-semibold">My Classes</h2>
-          <Link href="/student/dashboard/classes">
-            <Button variant="outline" size="sm">
-              View All Classes
-            </Button>
-          </Link>
-        </div> */}
-        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 justify-items-center">
           {classesWithColors.length > 0 ? (
             classesWithColors.slice(0, 3).map((classItem) => (
@@ -155,10 +152,13 @@ export default function StudentDashboardClient({ student, classes }: StudentDash
       {/* Progress Cards */}
       <section>
         <h2 className="text-xl md:text-2xl font-semibold mb-4">My Progress</h2>
+        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="p-6 text-center">
-              <p className="text-2xl font-bold">{student?.progress?.completedAssignments || 0}/{student?.progress?.totalAssignments || 0}</p>
+              <p className="text-2xl font-bold">
+                {student?.progress?.completedAssignments || 0}/{student?.progress?.totalAssignments || 0}
+              </p>
               <p className="text-gray-500 text-sm">Completed Assignments</p>
             </CardContent>
           </Card>
@@ -172,7 +172,9 @@ export default function StudentDashboardClient({ student, classes }: StudentDash
           
           <Card>
             <CardContent className="p-6 text-center">
-              <p className="text-2xl font-bold">${student?.progress?.balance || 0}</p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(student?.progress?.balance || 0)}
+              </p>
               <p className="text-gray-500 text-sm">Bank Balance</p>
             </CardContent>
           </Card>
@@ -184,6 +186,7 @@ export default function StudentDashboardClient({ student, classes }: StudentDash
             </CardContent>
           </Card>
         </div>
+        
         <SessionDebugger />
       </section>
     </div>

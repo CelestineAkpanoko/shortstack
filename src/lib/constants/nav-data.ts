@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 import mascot from '../../../public/assets/img/Mascout 9ldpi.png';
-import simple_logo from '../../../public/assets/img/logo simple - greenldpi.png';
+import simple_logo from '../../../public/assets/img/logo-simple-greenldpi.png';
 
 // Centralized navigation data for consistent use across components
 export const dashboardData = {
