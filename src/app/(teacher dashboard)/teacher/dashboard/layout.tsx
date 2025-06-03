@@ -5,7 +5,7 @@ import { SidebarLeft } from "@/src/components/sidebar-left";
 import { SidebarProvider, SidebarInset } from "@/src/components/ui/sidebar";
 import { Toaster } from "@/src/components/ui/sonner";
 import { useSession, signOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import DashboardHeader from "@/src/components/dashboard/DashboardHeader";
 import { HEADER_HEIGHT } from "@/src/lib/constants/header_height";
 import { X, LogOut } from "lucide-react";
@@ -33,10 +33,62 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [pageTitle, setPageTitle] = useState("Dashboard");
   const pathname = usePathname();
+  const router = useRouter();
   
-  const { data: session } = useSession({
+  const { data: session, status } = useSession({
     required: true,
   });
+
+  // ✅ ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
+
+  // Handle SUPER user redirect at layout level
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role === "SUPER") {
+      // Only redirect if we're on the dashboard root
+      if (pathname === "/teacher/dashboard") {
+        router.replace("/teacher/dashboard/lesson-plans");
+        return;
+      }
+    }
+  }, [session, status, pathname, router]);
+
+  // Update page title based on current path
+  useEffect(() => {
+    if (pathname.includes("/calendar")) setPageTitle("Calendar");
+    else if (pathname.includes("/classes")) setPageTitle("Classes");
+    else if (pathname.includes("/bills")) setPageTitle("Bills");
+    else if (pathname.includes("/bank-accounts")) setPageTitle("Bank Accounts");
+    else if (pathname.includes("/lesson-plans")) setPageTitle("Lesson Plans");
+    else if (pathname.includes("/storefront")) setPageTitle("Storefront");
+    else setPageTitle("Dashboard");
+  }, [pathname]);
+
+  // Close mobile sidebar when clicking outside or navigating
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [pathname]);
+
+  // ✅ NOW SAFE TO DO EARLY RETURNS AFTER ALL HOOKS ARE CALLED
+
+  // Show loading state while session is loading
+  if (status === "loading") {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Don't render anything for SUPER users on dashboard root to prevent flash
+  if (status === "authenticated" && 
+      session?.user?.role === "SUPER" && 
+      pathname === "/teacher/dashboard") {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   
   // Get filtered navigation items based on user role
   const filteredNavItems = getFilteredNavItems(
@@ -51,26 +103,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     "Teacher";
   const teacherInitial = teacherName.charAt(0);
   const teacherImage = session?.user?.image;
-  
-  // Update page title based on current path
-  useEffect(() => {
-    if (pathname.includes("/calendar")) setPageTitle("Calendar");
-    else if (pathname.includes("/classes")) setPageTitle("Classes");
-    else if (pathname.includes("/bills")) setPageTitle("Bills");
-    else if (pathname.includes("/bank-accounts")) setPageTitle("Bank Accounts");
-    else if (pathname.includes("/lesson-plans")) setPageTitle("Lesson Plans");
-    else if (pathname.includes("/storefront")) setPageTitle("Storefront");
-    else setPageTitle("Dashboard");
-  }, [pathname]);
 
   const handleLogout = async () => {
     await signOut({ redirect: true, callbackUrl: "/teacher" });
   };
-
-  // Close mobile sidebar when clicking outside or navigating
-  useEffect(() => {
-    setIsMobileSidebarOpen(false);
-  }, [pathname]);
 
   // Close sidebar function
   const closeMobileSidebar = () => {
@@ -129,11 +165,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NavLogo items={dashboardData.dashLogo} />
           </div>
           
-    
-          
           {/* Mobile Navigation */}
           <div className="px-2 py-4 space-y-1">
-            <NavMain items={dashboardData.navMain} />
+            <NavMain items={filteredNavItems} />
           </div>
         </div>
       </div>

@@ -17,6 +17,11 @@ export async function middleware(req: NextRequest) {
       const url = new URL("/student/dashboard", req.url);
       return NextResponse.redirect(url);
     }
+    
+    if (session.role === "SUPER" && pathname === "/teacher/dashboard") {
+      const url = new URL("/teacher/dashboard/lesson-plans", req.url);
+      return NextResponse.redirect(url);
+    }
   }
 
   if (pathname.startsWith("/student/dashboard")) {
@@ -33,8 +38,8 @@ export async function middleware(req: NextRequest) {
   }
 
   // Prevent access to the missing main-app.js which causes 404s
-  if (req.nextUrl.pathname.includes('/static/chunks/main-app.js')) {
-    return NextResponse.redirect(new URL('/', req.url));
+  if (req.nextUrl.pathname.includes("/static/chunks/main-app.js")) {
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   return NextResponse.next();
@@ -46,6 +51,6 @@ export const config = {
     "/student/dashboard/:path*",
     "/api/:path*",
     "/api/restricted/:path*",
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 };

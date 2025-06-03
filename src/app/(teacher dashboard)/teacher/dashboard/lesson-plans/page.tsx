@@ -36,7 +36,7 @@ interface LessonPlan {
 
 export default function LessonPlansPage() {
   const { data: session, status } = useSession();
-  
+
   // Set default tab based on user role - templates for super users, my-plans for regular teachers
   const isSuperUser = session?.user?.role === "SUPER";
   const [activeTab, setActiveTab] = useState<"my-plans" | "templates">(
@@ -157,10 +157,14 @@ export default function LessonPlansPage() {
 
   const getColumnColor = (index: number) => {
     switch (index % 3) {
-      case 0: return "bg-blue-100";
-      case 1: return "bg-green-100";
-      case 2: return "bg-yellow-100";
-      default: return "bg-blue-100";
+      case 0:
+        return "bg-blue-100";
+      case 1:
+        return "bg-green-100";
+      case 2:
+        return "bg-yellow-100";
+      default:
+        return "bg-blue-100";
     }
   };
 
@@ -173,6 +177,13 @@ export default function LessonPlansPage() {
       {isSuperUser ? (
         // For super users, just show the templates content directly (no tabs)
         <div>
+          {/* Show message if no templates exist yet */}
+          {genericPlans.length === 0 && (
+            <div className="text-center py-8 text-gray-500 mb-6">
+              No templates available. Create your first template using the card
+              on the left.
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {/* Render generic lesson plan cards */}
             {genericPlans.map((plan, index) => (
@@ -191,13 +202,6 @@ export default function LessonPlansPage() {
             <AddGenericLessonPlanCard
               onClick={() => setIsGenericDialogOpen(true)}
             />
-
-            {/* Show message if no templates exist yet */}
-            {genericPlans.length === 0 && (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                No templates available. Create your first template using the card on the left.
-              </div>
-            )}
           </div>
         </div>
       ) : (
@@ -229,7 +233,8 @@ export default function LessonPlansPage() {
                       // Refresh user plans after deletion
                       if (session?.user?.id) {
                         getLessonPlans(session.user.id).then((response) => {
-                          if (response.success) setUserPlans(response.data || []);
+                          if (response.success)
+                            setUserPlans(response.data || []);
                         });
                       }
                     }}
@@ -241,7 +246,10 @@ export default function LessonPlansPage() {
                 </div>
               )}
 
-              <AddAnything title="Create Lesson Plan" FormComponent={AddLessonPlanDialog} />
+              <AddAnything
+                title="Add Lesson Plan"
+                FormComponent={AddLessonPlanDialog}
+              />
             </div>
           </TabsContent>
 
@@ -279,7 +287,9 @@ export default function LessonPlansPage() {
               const response = await getLessonPlans(session.user.id);
               if (response.success) setUserPlans(response.data || []);
             }
-          } } classCode={""}        />
+          }}
+          classCode={""}
+        />
       )}
 
       {/* Dialog for creating/editing generic lesson plans (templates) - only visible to super users */}
