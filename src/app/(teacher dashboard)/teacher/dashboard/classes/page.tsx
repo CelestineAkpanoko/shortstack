@@ -17,7 +17,8 @@ export default async function ClassesPage() {
 
   return (
     <div className="w-full">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      {/* ✅ Improved grid with better alignment */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
         {sortedClasses.map((cls) => {
           // Ensure proper data transformation for consistent display
           return (
@@ -35,6 +36,7 @@ export default async function ClassesPage() {
             />
           );
         })}
+        {/* ✅ Add class card with consistent spacing */}
         <DashboardAddClassCard />
       </div>
     </div>

@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 // import DashboardAddStoreItemCard from "@/src/components/storefront/dashboardAddStoreItemCard";
 import { getAllStoreItems } from "@/src/app/actions/storeFrontActions";
@@ -16,10 +16,14 @@ interface ItemClass {
 async function StoreItemsContent() {
   const getColumnColor = (index: number) => {
     switch (index % 3) {
-      case 0: return "bg-blue-100";
-      case 1: return "bg-green-100";
-      case 2: return "bg-yellow-100";
-      default: return "bg-blue-100";
+      case 0:
+        return "bg-blue-100";
+      case 1:
+        return "bg-green-100";
+      case 2:
+        return "bg-yellow-100";
+      default:
+        return "bg-blue-100";
     }
   };
   const response = await getAllStoreItems();
@@ -31,7 +35,7 @@ async function StoreItemsContent() {
   const sortedStoreItems = [...response.data].reverse();
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
       {sortedStoreItems.map((storeItem, index) => (
         <StoreItemCard
           key={storeItem.id}

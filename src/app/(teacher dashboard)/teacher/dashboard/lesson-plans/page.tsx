@@ -184,7 +184,7 @@ export default function LessonPlansPage() {
               on the left.
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
             {/* Render generic lesson plan cards */}
             {genericPlans.map((plan, index) => (
               <LessonPlanCard
@@ -219,7 +219,7 @@ export default function LessonPlansPage() {
 
           <TabsContent value="my-plans">
             {/* Regular teachers' lesson plans content */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
               {userPlans.length > 0 ? (
                 userPlans.map((plan, index) => (
                   <LessonPlanCard
@@ -247,7 +247,7 @@ export default function LessonPlansPage() {
               )}
 
               <AddAnything
-                title="Add Lesson Plan"
+                title="Create Lesson Plan"
                 FormComponent={AddLessonPlanDialog}
               />
             </div>
@@ -255,7 +255,7 @@ export default function LessonPlansPage() {
 
           <TabsContent value="templates">
             {/* Templates content for regular teachers */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
               {genericPlans.map((plan, index) => (
                 <LessonPlanCard
                   key={plan.id}
