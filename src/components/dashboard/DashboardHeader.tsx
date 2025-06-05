@@ -1,5 +1,4 @@
 import React from "react";
-import Notification from "@/src/components/notification";
 import UserDropdown from "./UserDropdown";
 import { Menu } from "lucide-react";
 

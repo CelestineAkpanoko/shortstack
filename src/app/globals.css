@@ -1056,3 +1056,83 @@ body {
 [data-sidebar="menu-button"][data-active="true"] [data-sidebar="menu-icon"] {
   color: black !important;
 }
+
+/* Add these calendar layout fixes to your globals.css file */
+
+/* Ensure calendar container doesn't exceed available width */
+.mina-scheduler-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* Fix month view cell sizing */
+.month-grid {
+  width: 100% !important;
+  table-layout: fixed !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+}
+
+/* Ensure month view cells are consistent and don't expand */
+.month-day-cell {
+  width: calc(100% / 7) !important;
+  max-width: calc(100% / 7) !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  padding: 0.25rem !important;
+}
+
+/* Ensure event containers don't overflow cells */
+.month-day-cell [class*="event-container"] {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Enforce truncation of event titles */
+.month-day-cell [class*="event-container"] * {
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+/* Make week view responsive */
+.week-view-grid {
+  width: 100% !important;
+  table-layout: fixed !important;
+  overflow-x: hidden !important;
+}
+
+/* .week-view-hour-cell {
+  width: calc(100% / 7) !important;
+  max-width: calc(100% / 7) !important;
+  box-sizing: border-box !important;
+} */
+
+/* Ensure day column headers are properly sized */
+.mina-scheduler-column-header {
+  width: calc(100% / 7) !important;
+  max-width: calc(100% / 7) !important;
+  box-sizing: border-box !important;
+}
+
+/* Fix day view layout */
+.daily-view-container {
+  width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* Fix for mobile devices */
+@media (max-width: 640px) {
+  .month-day-cell {
+    min-height: 60px !important;
+    padding: 0.125rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .calendar-panel {
+    overflow-x: hidden !important;
+  }
+}

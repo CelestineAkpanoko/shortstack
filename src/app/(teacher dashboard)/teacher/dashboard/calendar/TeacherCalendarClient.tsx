@@ -7,7 +7,6 @@ import { SchedulerProvider } from "@/src/providers/scheduler/schedular-provider"
 import SchedulerViewFilteration from "@/src/components/scheduler/_components/view/schedular-view-filteration";
 import { Button } from "@/src/components/ui/button";
 import { toast } from "sonner";
-import CreateEventFormWithHook from "@/src/components/calendar/CreateEventFormWithHook";
 import { TodoSidebar } from "@/src/components/todo-sidebar";
 import { CheckSquare, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { HEADER_HEIGHT } from "@/src/lib/constants/header_height";
@@ -64,6 +63,223 @@ export default function TeacherCalendarClient() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showTodoSidebar, isMobile]);
+
+  // Add custom styles for calendar layout and text truncation
+  useEffect(() => {
+    // Create a single style element for all calendar fixes
+    const styleElement = document.createElement('style');
+    styleElement.id = 'calendar-comprehensive-fixes';
+    
+    // Comprehensive styles that address all layout issues
+    styleElement.textContent = `
+      /* Base container fixes */
+      .mina-scheduler-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Month view grid layout with proper cell distribution */
+      .month-grid {
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important;
+        grid-template-rows: auto repeat(6, minmax(90px, 1fr)) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+      }
+      
+      /* Month day cell sizing and positioning */
+      .month-day-cell {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 90px !important;
+        height: auto !important;
+        max-height: 160px !important;
+        overflow: hidden !important;
+        position: relative !important;
+        box-sizing: border-box !important;
+        padding: 4px !important;
+      }
+      
+      /* Event item container constraints */
+      .month-day-cell [data-event-item],
+      .week-view-grid [data-event-item] {
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow: hidden !important;
+        margin-bottom: 2px !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+      }
+      
+      /* All event content elements must respect container */
+      .month-day-cell [data-event-item] *,
+      .week-view-grid [data-event-item] * {
+        max-width: 100% !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Target specific event content elements */
+      .event-item-title,
+      .event-title,
+      .event-content,
+      [data-event-item] .truncate,
+      [data-event-item] [class*="title"],
+      [data-event-item] h3,
+      [data-event-item] h4,
+      [data-event-item] p,
+      [data-event-item] div {
+        max-width: 100% !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        display: block !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Event containers */
+      [class*="event-container"] {
+        max-width: 100% !important;
+        width: 100% !important;
+        position: relative !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+      }
+      
+      /* Nested event elements */
+      [class*="event-container"] > div,
+      [class*="event-content"] > div,
+      [class*="event-title"],
+      [class*="event-text"] {
+        max-width: 100% !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Main scrollable areas */
+      .calendar-panel {
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        height: calc(100vh - 170px) !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      
+      /* Main calendar container */
+      .sticky-header-calendar {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+
+      /* Ensure background colors don't cause overflow */
+      [style*="background-color"] {
+        max-width: 100% !important;
+        overflow: hidden !important;
+      }
+      
+      /* Improved hover effect for event titles */
+      .month-day-cell [data-event-item]:hover {
+        position: relative !important;
+        z-index: 50 !important;
+      }
+      
+      .month-day-cell [data-event-item]:hover [class*="title"],
+      .month-day-cell [data-event-item]:hover [class*="event-text"],
+      .month-day-cell [data-event-item]:hover .truncate {
+        position: absolute !important;
+        background-color: inherit !important;
+        padding: 2px 4px !important;
+        border-radius: 2px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        min-width: 100% !important;
+        max-width: 250px !important;
+        z-index: 51 !important;
+      }
+      
+      /* Week view specific fixes */
+      .week-view-grid {
+        table-layout: fixed !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      
+      .week-view-grid td {
+        position: relative !important;
+        overflow: hidden !important;
+        width: calc(100% / 7) !important;
+        max-width: calc(100% / 7) !important;
+        box-sizing: border-box !important;
+      }
+      
+      .week-view-hour-cell {
+        box-sizing: border-box !important;
+        position: relative !important;
+        overflow: hidden !important;
+      }
+      
+      /* Fix day column headers */
+      .mina-scheduler-column-header {
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+      }
+      
+      /* Mobile specific adjustments */
+      @media (max-width: 640px) {
+        .month-day-cell {
+          min-height: 60px !important;
+          padding: 2px !important;
+        }
+        
+        .calendar-panel {
+          height: calc(100vh - 150px) !important;
+        }
+        
+        .month-day-cell [data-event-item] {
+          font-size: 0.75rem !important;
+        }
+      }
+    `;
+    
+    // Remove any existing style elements to avoid conflicts
+    const existingStyle1 = document.getElementById('calendar-cell-fixes');
+    if (existingStyle1) {
+      document.head.removeChild(existingStyle1);
+    }
+    
+    const existingStyle2 = document.getElementById('calendar-fix-styles');
+    if (existingStyle2) {
+      document.head.removeChild(existingStyle2);
+    }
+    
+    const existingStyle3 = document.getElementById('calendar-comprehensive-fixes');
+    if (existingStyle3) {
+      document.head.removeChild(existingStyle3);
+    }
+    
+    // Add the new comprehensive style element
+    document.head.appendChild(styleElement);
+    
+    return () => {
+      // Clean up
+      const styleToRemove = document.getElementById('calendar-comprehensive-fixes');
+      if (styleToRemove) {
+        document.head.removeChild(styleToRemove);
+      }
+    };
+  }, []);
 
   // Function to fetch events
   const fetchEvents = async () => {
@@ -255,7 +471,7 @@ export default function TeacherCalendarClient() {
     onClose: () => void;
   }) => {
     return (
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 mb-4">
         <h2 className="text-lg font-semibold">{event.title || "Untitled Event"}</h2>
 
         {event.description && (

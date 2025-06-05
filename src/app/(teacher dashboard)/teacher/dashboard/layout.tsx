@@ -10,11 +10,7 @@ import DashboardHeader from "@/src/components/dashboard/DashboardHeader";
 import { HEADER_HEIGHT } from "@/src/lib/constants/header_height";
 import { X, LogOut } from "lucide-react";
 import { NavMain } from "@/src/components/nav-main";
-import Link from "next/link";
-
-// Import NavLogo component to keep branding consistent
 import { NavLogo } from "@/src/components/nav-logo";
-// Get the dashboard navigation data from shared source 
 import { dashboardData } from "@/src/lib/constants/nav-data";
 
 const getFilteredNavItems = (role: string, originalItems: any[]) => {
@@ -190,11 +186,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         {/* Main content area */}
         <div 
-          className={`bg-gray-50 flex-1 overflow-y-auto`}
+          className={`bg-gray-50 flex-1 overflow-hidden`} // Change overflow-y-auto to overflow-hidden for calendar pages
           style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}
         >
           {/* Apply different styles based on page type */}
-          <div className={`mx-auto w-full ${isCalendarPage ? 'p-0 max-w-none' : 'max-w-7xl px-2 sm:px-4 md:px-6 py-2 md:py-4'}`}>
+          <div className={`mx-auto w-full overflow-hidden ${isCalendarPage ? 'p-0 max-w-none' : 'max-w-7xl px-2 sm:px-4 md:px-6 py-2 md:py-4'}`}>
             {children}
           </div>
         </div>

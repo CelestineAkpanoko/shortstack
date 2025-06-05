@@ -89,7 +89,7 @@ export default function LandingLayout({
       
       {/* Page content */}
       {children}
-      
+      <SpeedInsights/>
       {/* Footer */}
 
       <div className="relative">
