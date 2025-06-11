@@ -37,7 +37,11 @@ async function BillsContent() {
   };
 
   return (
+<<<<<<< Updated upstream
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
+=======
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3">
+>>>>>>> Stashed changes
       {sortedBills.map((bill, index) => (
         <BillCard
           key={bill.id}

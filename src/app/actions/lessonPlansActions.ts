@@ -71,15 +71,29 @@ export async function createLessonPlan(
   }
 }
 
-// Get all lesson plans for a given user.
-export async function getLessonPlans(userId: string): Promise<any> {
+// Get all lesson plans for a given user with session verification
+export async function getLessonPlans(userId?: string): Promise<any> {
   try {
+    // ✅ Get session to ensure user can only see their own plans
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // ✅ Use session user ID instead of passed userId for security
+    const targetUserId = userId || session.user.id;
+    
+    // ✅ Ensure user can only see their own lesson plans
+    if (targetUserId !== session.user.id && session.user.role !== "SUPER") {
+      return { success: false, error: 'Forbidden: Can only view your own lesson plans' };
+    }
+
     const lessonPlans = await db.lessonPlan.findMany({
       where: {
-        OR: [
-          { class: { userId } }, // User-specific lesson plans
-          { genericLessonPlanId: null }, // Generic lesson plans
-        ],
+        // ✅ Only get lesson plans from classes owned by this user
+        class: { 
+          userId: targetUserId
+        }
       },
       include: {
         class: {
@@ -87,11 +101,13 @@ export async function getLessonPlans(userId: string): Promise<any> {
             grade: true, 
             name: true,
             emoji: true,
-            code: true
+            code: true,
+            userId: true
           }
         },
         genericLessonPlan: true,
       },
+      orderBy: { createdAt: 'desc' }
     });
 
     // Map to include grade information
@@ -532,5 +548,64 @@ export async function copyGenericLessonPlanToUser(
   } catch (error: any) {
     console.error("Error copying generic lesson plan:", error);
     return { success: false, error: "Failed to copy generic lesson plan" };
+  }
+}
+
+// Add this new function to lessonPlansActions.ts
+export async function assignExistingLessonPlan(
+  sourcePlanId: string,
+  targetClassCode: string,
+  customName?: string
+): Promise<LessonPlanResponse> {
+  try {
+    const session = await getAuthSession();
+    if (!session?.user?.id || session.user.role !== "TEACHER") {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Get the source lesson plan
+    const sourcePlan = await db.lessonPlan.findUnique({
+      where: { id: sourcePlanId },
+      include: {
+        class: { select: { userId: true } },
+        files: true,
+        assignmentRelations: true
+      }
+    });
+
+    if (!sourcePlan) {
+      return { success: false, error: 'Source lesson plan not found' };
+    }
+
+    // Verify user owns the source lesson plan
+    if (sourcePlan.class.userId !== session.user.id) {
+      return { success: false, error: 'You do not own the source lesson plan' };
+    }
+
+    // Verify target class exists and user owns it
+    const targetClass = await db.class.findUnique({
+      where: { code: targetClassCode },
+      select: { id: true, userId: true }
+    });
+
+    if (!targetClass || targetClass.userId !== session.user.id) {
+      return { success: false, error: 'Target class not found or you do not own it' };
+    }
+
+    // Create the new lesson plan copy
+    const newLessonPlan = await db.lessonPlan.create({
+      data: {
+        name: customName || sourcePlan.name,
+        description: sourcePlan.description,
+        classId: targetClassCode,
+        // Note: files and assignments would need to be copied separately if needed
+      },
+    });
+
+    revalidatePath(`/teacher/dashboard/classes/${targetClassCode}`);
+    return { success: true, data: newLessonPlan };
+  } catch (error: any) {
+    console.error('Assign existing lesson plan error:', error);
+    return { success: false, error: 'Failed to assign lesson plan' };
   }
 }

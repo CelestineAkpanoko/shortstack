@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getLessonPlansByClass } from '@/src/app/actions/lessonPlansActions';
 import  LessonPlanCard from '@/src/components/lessonPlans/LessonPlanCard';
 import AddLessonPlanCard from '@/src/components/lessonPlans/AddLessonPlanCard';
-import AddLessonPlanDialog from '@/src/components/lessonPlans/AddLessonPlanDialog';
+import AssignLessonPlanDialog from '@/src/components/lessonPlans/AssignLessonPlanDialog';
 import Breadcrumbs from '@/src/components/Breadcrumbs';
 
 interface LessonPlansListProps {
@@ -12,11 +12,12 @@ interface LessonPlansListProps {
   cName: string;
 }
 
-interface AddLessonPlanDialogProps {
+interface AssignLessonPlanDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => Promise<void>;
+  onSuccess: () => void;
   classCode: string;
+  className: string;
 }
 
 export default function LessonPlansList({ classCode, cName }: LessonPlansListProps) {
@@ -62,10 +63,11 @@ export default function LessonPlansList({ classCode, cName }: LessonPlansListPro
           <AddLessonPlanCard onClick={() => setIsDialogOpen(true)} />
         </div>
       )}
-      <AddLessonPlanDialog
+      <AssignLessonPlanDialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         classCode={classCode}
+        className={cName}
         onSuccess={fetchLessonPlans}
       />
     </div>
