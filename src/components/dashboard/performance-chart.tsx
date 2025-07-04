@@ -157,6 +157,26 @@ export function PerformanceChart() {
           </div>
         </div>
       </div>
+
+      {/* Legend */}
+      <div className="mt-4">
+        <div className="flex flex-wrap gap-3 justify-center">
+          {classData.map((cls) => {
+            const classColor = getColorForClass(cls.color || "primary");
+            return (
+              <div key={`legend-${cls.id}`} className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded-sm"
+                  style={{ backgroundColor: classColor }}
+                />
+                <span className="text-sm text-gray-700">
+                  {cls.emoji} {cls.name} ({cls.averageGrade}%)
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

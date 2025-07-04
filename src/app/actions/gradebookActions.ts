@@ -276,7 +276,7 @@ export async function getStudentGrades(classCode: string): Promise<GradebookResp
     }
 
     // Get all assignments for the class using many-to-many relationship
-    const assignments = await db.assignment.findMany({
+    const allAssignments = await db.assignment.findMany({
       where: { 
         OR: [
           // Direct class assignments
@@ -287,7 +287,7 @@ export async function getStudentGrades(classCode: string): Promise<GradebookResp
               }
             }
           },
-          // Assignments through lesson plans
+          // Assignments through lesson plans that are specifically assigned to this class
           {
             lessonPlans: {
               some: {
@@ -306,8 +306,43 @@ export async function getStudentGrades(classCode: string): Promise<GradebookResp
         name: true,
         fileType: true,
         dueDate: true,
+        classes: {
+          where: {
+            id: enrollment.classId
+          },
+          select: {
+            id: true
+          }
+        },
+        lessonPlans: {
+          where: {
+            classes: {
+              some: {
+                id: enrollment.classId
+              }
+            }
+          },
+          select: {
+            id: true,
+            classes: {
+              where: {
+                id: enrollment.classId
+              },
+              select: {
+                id: true
+              }
+            }
+          }
+        }
       },
       orderBy: { dueDate: 'asc' }
+    });
+
+    // Filter to ensure assignments are actually connected to this specific class
+    const assignments = allAssignments.filter(assignment => {
+      const isDirectlyConnected = assignment.classes.length > 0;
+      const isConnectedThroughLessonPlan = assignment.lessonPlans.some(lp => lp.classes.length > 0);
+      return isDirectlyConnected || isConnectedThroughLessonPlan;
     });
 
     // Get all submissions for this student in this class
@@ -388,7 +423,7 @@ export async function getStudentOverallProgress(): Promise<GradebookResponse> {
     const allAssignments = await db.assignment.findMany({
       where: { 
         OR: [
-          // Direct class assignments
+          // Direct class assignments - only for enrolled classes
           {
             classes: {
               some: {
@@ -396,7 +431,7 @@ export async function getStudentOverallProgress(): Promise<GradebookResponse> {
               }
             }
           },
-          // Assignments through lesson plans
+          // Assignments through lesson plans - only for lesson plans assigned to enrolled classes
           {
             lessonPlans: {
               some: {
@@ -449,9 +484,21 @@ export async function getStudentOverallProgress(): Promise<GradebookResponse> {
     });
 
     // Remove duplicates manually since distinct might not work as expected
-    const assignments = allAssignments.filter((assignment, index, self) => 
-      index === self.findIndex(a => a.id === assignment.id)
-    );
+    // Also filter to ensure assignments are actually connected to the student's enrolled classes
+    const assignments = allAssignments.filter((assignment, index, self) => {
+      // Remove duplicates
+      const isUnique = index === self.findIndex(a => a.id === assignment.id);
+      if (!isUnique) return false;
+
+      // Check if assignment is connected to any of the student's enrolled classes
+      const isConnectedToEnrolledClass = 
+        assignment.classes.some(cls => classIds.includes(cls.id)) ||
+        assignment.lessonPlans.some(lp => 
+          lp.classes.some(cls => classIds.includes(cls.id))
+        );
+
+      return isConnectedToEnrolledClass;
+    });
 
     // Get all submissions for this student across all classes
     const submissions = await db.studentAssignmentSubmission.findMany({
@@ -804,16 +851,37 @@ export async function getClassAssignments(classCode: string): Promise<GradebookR
             id: true,
             name: true
           }
+        },
+        studentSubmissions: {
+          where: {
+            grade: { not: null }
+          },
+          select: {
+            grade: true
+          }
         }
       },
       orderBy: { dueDate: 'asc' }
     });
 
-    // Add classId to each assignment for compatibility
-    const assignmentsWithClassId = assignments.map(assignment => ({
-      ...assignment,
-      classId: classData.id
-    }));
+    // Calculate average grades and add classId to each assignment for compatibility
+    const assignmentsWithClassId = assignments.map(assignment => {
+      const grades = assignment.studentSubmissions.map(sub => sub.grade).filter(grade => grade !== null) as number[];
+      const averageGrade = grades.length > 0 
+        ? Math.round(grades.reduce((sum, grade) => sum + grade, 0) / grades.length)
+        : null;
+
+      // Get the first lesson plan name if available
+      const lessonPlanName = assignment.lessonPlans.length > 0 ? assignment.lessonPlans[0].name : null;
+
+      return {
+        ...assignment,
+        classId: classData.id,
+        averageGrade,
+        totalSubmissions: assignment.studentSubmissions.length,
+        lessonPlanName
+      };
+    });
 
     return {
       success: true,

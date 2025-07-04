@@ -23,7 +23,10 @@ interface Assignment {
   rubric?: string | null;      
   classId: string;             
   createdAt: string;          
-  updatedAt: string;           
+  updatedAt: string;
+  averageGrade?: number | null;
+  totalSubmissions?: number;
+  lessonPlanName?: string | null;
   
   lessonPlans?: Array<{
     id: string;
@@ -140,9 +143,12 @@ export default function Gradebook({ classCode }: GradebookProps) {
                 id: assignment.id,
                 name: assignment.name,
                 classId: assignment.classId,
+                averageGrade: assignment.averageGrade,
+                lessonPlanName: assignment.lessonPlanName,
+                totalSubmissions: assignment.totalSubmissions,
               }}
               backgroundColor="bg-white"
-              onSelect={handleAssignmentSelect} 
+              onSelectAction={handleAssignmentSelect} 
             />
           ))}
         </div>
